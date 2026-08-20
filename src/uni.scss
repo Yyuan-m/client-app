@@ -1,0 +1,59 @@
+/**
+ * uni-app 全局样式变量（uview-plus 主题定制 + Ferrari 设计令牌）
+ *
+ * 关键：必须 @import 'uview-plus/theme.scss' —— 该文件提供：
+ *  1. @mixin flex（uview-plus 组件内部 @include flex 依赖此 mixin）
+ *  2. $u-primary / $u-success 等 SCSS 变量（uview-plus 组件样式依赖）
+ *  3. @mixin up-export-legacy-light-vars（主题色 CSS 变量导出）
+ *
+ * uni.scss 会被 @dcloudio/vite-plugin-uni 自动注入到所有组件（含 node_modules/uview-plus）
+ * 的 <style lang="scss"> 中，因此在此处引入即可全局生效。
+ */
+@import 'uview-plus/theme.scss';
+
+/* ========== Ferrari 设计令牌 ========== */
+$brand-primary: #ff2e2e;          /* 法拉利红 */
+$brand-primary-dark: #c81616;
+$brand-accent: #ff5a3c;            /* 橙色（价格/促销） */
+$brand-gold: #d4af37;              /* 金色（高端标识） */
+
+$bg-dark: #0a0a0a;
+$bg-card-dark: #1a1a1a;
+$bg-light: #f5f5f7;
+$bg-card-light: #ffffff;
+
+$text-primary-dark: #f5f5f5;
+$text-secondary-dark: #aeaeb2;
+$text-primary-light: #1d1d1f;
+$text-secondary-light: #6e6e73;
+
+/* ========== uview-plus 主题定制（覆盖默认蓝色为法拉利红） ========== */
+/* 注意：theme.scss 已用 !default 声明，此处直接赋值即可覆盖 */
+$u-primary: $brand-primary;
+$u-primary-light: #ff5959;
+$u-primary-disabled: #f5a3a3;
+$u-primary-dark: $brand-primary-dark;
+$u-warning: #ff9900;
+$u-success: #07c160;
+$u-error: $brand-primary;
+$u-info: #909399;
+
+$u-main-color: #f5f5f5;
+$u-content-color: #d1d1d6;
+$u-tips-color: #aeaeb2;
+$u-light-color: #2a2a2a;
+
+$u-border-color: #2a2a2a;
+$u-bg-color: #0a0a0a;
+
+/* 字号 */
+$u-font-size-sm: 24rpx;
+$u-font-size-base: 28rpx;
+$u-font-size-lg: 32rpx;
+$u-font-size-xl: 36rpx;
+
+/* 圆角 */
+$u-border-radius-sm: 8rpx;
+$u-border-radius-base: 12rpx;
+$u-border-radius-lg: 16rpx;
+$u-border-radius-circle: 50%;
