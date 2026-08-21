@@ -64,16 +64,16 @@ export const dateUtil = {
   today(): string {
     return dayjs().format('YYYY-MM-DD')
   },
-  /** 租期规则校验：是否满足最少/最长租期 */
+  /** 租期规则校验：是否满足最少/最长租期（maxDays 传 null/undefined 表示不限） */
   validateRentDays(
     start: dayjs.ConfigType,
     end: dayjs.ConfigType,
     minDays: number = 1,
-    maxDays: number = 20
+    maxDays: number | null | undefined = null
   ): { valid: boolean; days: number; msg?: string } {
     const days = this.daysBetween(start, end)
     if (days < minDays) return { valid: false, days, msg: `最少租期 ${minDays} 天` }
-    if (days > maxDays) return { valid: false, days, msg: `最长租期 ${maxDays} 天` }
+    if (maxDays != null && days > maxDays) return { valid: false, days, msg: `最长租期 ${maxDays} 天` }
     return { valid: true, days }
   }
 }
@@ -238,11 +238,30 @@ export const browserUtil = {
   }
 }
 
+// ====================== 7. 租赁统计分级（已租次数/天数） ======================
+/** 返回 'high' | 'mid' | 'low'，对应 着重 / 次重 / 轻微 显示等级 */
+export function rentCountLevel(count: number | string | null | undefined): 'high' | 'mid' | 'low' {
+  const v = Number(count) || 0
+  if (v > 50) return 'high'
+  if (v > 10) return 'mid'
+  return 'low'
+}
+
+/** 返回 'high' | 'mid' | 'low'，对应 着重 / 次重 / 轻微 显示等级 */
+export function rentDaysLevel(days: number | string | null | undefined): 'high' | 'mid' | 'low' {
+  const v = Number(days) || 0
+  if (v > 500) return 'high'
+  if (v > 50) return 'mid'
+  return 'low'
+}
+
 export default {
   storage,
   dateUtil,
   moneyUtil,
   imageUtil,
   validators,
-  browserUtil
+  browserUtil,
+  rentCountLevel,
+  rentDaysLevel
 }

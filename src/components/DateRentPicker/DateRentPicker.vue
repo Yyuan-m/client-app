@@ -26,8 +26,8 @@ export interface DateRentPickerProps {
   modelValue?: string[]
   /** 最少租期（天），默认 1 */
   minDays?: number
-  /** 最长租期（天），默认 20 */
-  maxDays?: number
+  /** 最长租期（天），默认不限（null）；由车辆级 maxRentDays 传入，为空时不限制 */
+  maxDays?: number | null
   /** 最早可租日（YYYY-MM-DD），用于已出租/已预约车辆 */
   minDate?: string
 }
@@ -35,7 +35,7 @@ export interface DateRentPickerProps {
 const props = withDefaults(defineProps<DateRentPickerProps>(), {
   modelValue: () => [],
   minDays: 1,
-  maxDays: 20,
+  maxDays: null,
   minDate: ''
 })
 
@@ -71,15 +71,18 @@ const pickerEnd = computed<string>(() => {
   return startDate.value || pickerStart.value
 })
 
-/** 快捷选项：根据 minDays/maxDays 动态过滤 */
+/** 快捷选项：根据 minDays/maxDays 动态过滤；maxDays 为 null 时不设上限 */
 const shortcuts = computed<Array<{ text: string; days: number }>>(() => {
   const all = [
     { text: '3天', days: 3 },
     { text: '7天', days: 7 },
     { text: '15天', days: 15 },
-    { text: '20天', days: 20 }
+    { text: '20天', days: 20 },
+    { text: '30天', days: 30 }
   ]
-  return all.filter((s) => s.days >= props.minDays && s.days <= props.maxDays)
+  return all
+    .filter((s) => s.days >= props.minDays)
+    .filter((s) => props.maxDays == null || s.days <= props.maxDays)
 })
 
 /** 监听外部 modelValue 变化，同步内部状态 */

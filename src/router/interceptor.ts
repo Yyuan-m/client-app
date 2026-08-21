@@ -36,7 +36,7 @@ const ROUTE_TABLE: Record<string, RouteMeta> = {
   '/pages/order/checkout': { title: '确认下单', requiresAuth: true },
   '/pages/order/list': { title: '我的订单', requiresAuth: true },
   '/pages/order/detail': { title: '订单详情', requiresAuth: true },
-  '/pages/profile/index': { title: '个人中心', requiresAuth: true }
+  '/pages/profile/index': { title: '个人中心' }
 }
 
 /** 从 url 字符串解析 path（不含 query） */

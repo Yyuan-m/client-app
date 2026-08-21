@@ -121,12 +121,17 @@ export interface CarVO {
   displacement?: string
   year?: number
   rating?: number | string
+  /** 已租次数（status 为 renting/completed 的订单数） */
   rentCount?: number
+  /** 累计已租天数（所有成功租赁订单 days 之和） */
+  rentDays?: number
   tags?: string[]
   isHot?: boolean
   isRecommend?: boolean
   /** 最少租期（天） */
   minRentDays?: number
+  /** 最大租期（天），null 表示不限 */
+  maxRentDays?: number | null
   /** 长租折扣配置 */
   weeklyDiscount?: number
   monthlyDiscount?: number

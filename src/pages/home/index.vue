@@ -10,6 +10,7 @@ import { ref, reactive, computed } from 'vue'
 import { onLoad, onShow, onPageScroll } from '@dcloudio/uni-app'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
+import { useCartStore } from '@/stores/cart'
 import { useSystemConfig } from '@/composables/useSystemConfig'
 import { getActiveCarouselApi } from '@/api/modules/carousel'
 import { getHotCarsApi } from '@/api/modules/car'
@@ -23,6 +24,7 @@ import type { CarouselVO, CarVO, AdvantageVO, CustomerReviewVO, CouponVO, OrderV
 
 const appStore = useAppStore()
 const userStore = useUserStore()
+const cartStore = useCartStore()
 const { config, loadConfig } = useSystemConfig()
 
 // 数据
@@ -38,6 +40,11 @@ const vehicleTypes = ref<DictDataVO[]>([])
 const loading = ref(true)
 const scrollTop = ref(0)
 const statusBarHeight = ref(0)
+// 首页右上角头像是否加载失败（失败时回退为 icon）
+const headerAvatarFailed = ref(false)
+function onHeaderAvatarError(): void {
+  headerAvatarFailed.value = true
+}
 
 // 微信小程序右上角胶囊按钮位置（自定义导航右侧按钮需避让）
 const capsuleRect = ref<{ top: number; right: number; bottom: number; left: number; width: number; height: number } | null>(null)
@@ -86,6 +93,17 @@ onLoad(async () => {
 })
 
 onShow(async () => {
+  // 刷新购物车数量（右上角购物车角标）
+  if (userStore.isLoggedIn) {
+    cartStore.initCart().catch((e) => console.error('[home] initCart failed:', e))
+    // 拉取最新用户信息，确保右上角头像显示最新
+    try {
+      await userStore.fetchUserInfo()
+      headerAvatarFailed.value = false
+    } catch (e) {
+      console.error('[home] fetchUserInfo failed:', e)
+    }
+  }
   // 登录态变化时重新加载我的订单和已领券
   if (userStore.isLoggedIn) {
     await Promise.all([loadMyActiveOrders(), loadClaimedCouponIds()])
@@ -392,9 +410,17 @@ function todayPlus(days: number): string {
         <view class="header-actions">
           <view class="header-icon" @tap="goCart">
             <text class="header-icon-symbol">🛒</text>
+            <view v-if="cartStore.totalCount > 0" class="header-cart-badge">{{ cartStore.totalCount > 99 ? '99+' : cartStore.totalCount }}</view>
           </view>
-          <view class="header-icon" @tap="userStore.isLoggedIn ? goProfile() : goLogin()">
-            <text class="header-icon-symbol">👤</text>
+          <view class="header-avatar-btn" @tap="userStore.isLoggedIn ? goProfile() : goLogin()">
+            <image
+              v-if="userStore.isLoggedIn && userStore.user?.avatar && !headerAvatarFailed"
+              :src="resolveClientImage(userStore.user.avatar)"
+              mode="aspectFill"
+              class="header-avatar-img"
+              @error="onHeaderAvatarError"
+            />
+            <text v-else class="header-icon-symbol">👤</text>
           </view>
         </view>
       </view>
@@ -677,6 +703,7 @@ function todayPlus(days: number): string {
 }
 
 .header-icon {
+  position: relative;
   width: 64rpx;
   height: 64rpx;
   border-radius: 50%;
@@ -690,6 +717,43 @@ function todayPlus(days: number): string {
   font-size: 36rpx;
   color: #f5f5f5;
   line-height: 1;
+}
+
+/* 右侧个人中心：登录后显示用户头像，未登录显示 icon */
+.header-avatar-btn {
+  position: relative;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  overflow: hidden;
+  background-color: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+/* 购物车角标 */
+.header-cart-badge {
+  position: absolute;
+  top: -6rpx;
+  right: -6rpx;
+  min-width: 30rpx;
+  height: 30rpx;
+  padding: 0 8rpx;
+  border-radius: 15rpx;
+  background-color: #ff2e2e;
+  color: #ffffff;
+  font-size: 20rpx;
+  font-weight: 700;
+  line-height: 30rpx;
+  text-align: center;
+  box-sizing: border-box;
 }
 
 /* Hero 轮播 */

@@ -112,6 +112,8 @@ function rejectPendingQueue(error: any): void {
 
 /** 倒计时 3 秒跳转登录页 */
 function showCountdownRedirect(options: { title?: string; messagePrefix?: string } = {}): void {
+  // 已在跳转流程中（含 reLaunch 过渡期）直接忽略，
+  // 避免启动时并发 401/403 反复弹窗导致弹窗卡死
   if (isRedirecting) return
   isRedirecting = true
 
@@ -121,9 +123,15 @@ function showCountdownRedirect(options: { title?: string; messagePrefix?: string
   let seconds = 3
   const updateText = () => `${messagePrefix}，${seconds} 秒后自动跳转登录页…`
 
-  // uni 端使用 showModal 替代 ElMessageBox，但 showModal 不支持实时更新文案
-  // 改用 showLoading + 自定义提示（每秒更新一次）
   let timer: ReturnType<typeof setInterval> | null = null
+  // 跳转守卫：无论倒计时结束还是用户点击，都只触发一次跳转，避免重复 reLaunch
+  let finished = false
+  const navigateToLogin = () => {
+    if (finished) return
+    finished = true
+    if (timer) clearInterval(timer)
+    doRedirectToLogin()
+  }
 
   uni.showModal({
     title,
@@ -131,19 +139,14 @@ function showCountdownRedirect(options: { title?: string; messagePrefix?: string
     showCancel: false,
     confirmText: '立即跳转',
     success: (res) => {
-      if (res.confirm && seconds > 0 && timer) {
-        clearInterval(timer)
-        doRedirectToLogin()
-      }
+      // 用户点击立即跳转 → 无条件立即跳转（不再依赖 seconds 的竞态）
+      if (res.confirm) navigateToLogin()
     }
   })
 
   timer = setInterval(() => {
     seconds--
-    if (seconds <= 0) {
-      if (timer) clearInterval(timer)
-      doRedirectToLogin()
-    }
+    if (seconds <= 0) navigateToLogin()
   }, 1000)
 }
 
@@ -161,19 +164,24 @@ function doRedirectToLogin(): void {
     .join('&')
   const currentFullPath = queryString ? `${currentPath}?${queryString}` : currentPath
 
-  // 已在登录页则不跳转
+  // 已在登录页则不跳转，直接复位标志，允许后续正常提示
   if (currentPath === '/pages/auth/login') {
     isRedirecting = false
     return
   }
 
-  // uni 端：使用 redirectTo 重定向到登录页（带 redirect 参数）
-  // 注意：因 store 内存中 token ref 已被下面 setToken('') 等清空操作影响，
-  // 这里采用 reLaunch 强制重置页面栈，避免守卫误判
-  isRedirecting = false
   const redirect = encodeURIComponent(currentFullPath)
+  // 注意：reLaunch 是异步操作。跳转过渡期内必须保持 isRedirecting = true，
+  // 否则启动时那些尚在途中的其它 401/403 响应会再次触发 showCountdownRedirect → 弹窗卡死。
+  // 因此复位移除到 reLaunch 的 complete 回调之后。
   uni.reLaunch({
-    url: `/pages/auth/login?redirect=${redirect}`
+    url: `/pages/auth/login?redirect=${redirect}`,
+    complete: () => {
+      // 稍作延时复位，确保登录页已挂载，避免过渡期尾部的并发 403 再次弹窗
+      setTimeout(() => {
+        isRedirecting = false
+      }, 400)
+    }
   })
 }
 

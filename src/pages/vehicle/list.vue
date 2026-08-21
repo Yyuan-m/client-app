@@ -14,7 +14,7 @@ import { useUserStore } from '@/stores/user'
 import { getCarListApi } from '@/api/modules/car'
 import { getDictByTypeApi } from '@/api/modules/system'
 import { resolveAdminImage, resolveClientImage, placeholderImage } from '@/utils/image'
-import { moneyUtil } from '@/utils'
+import { moneyUtil, rentCountLevel } from '@/utils'
 import type { CarVO, DictDataVO, PageResult } from '@/api/types'
 
 const filterStore = useFilterStore()
@@ -260,7 +260,7 @@ function currentTypeLabel(): string {
           </view>
           <view class="car-rating-rent">
             <view class="car-rating">★ {{ car.rating || '5.0' }}</view>
-            <view class="car-rent-count">{{ car.rentCount || 0 }} 次出租</view>
+            <view class="car-rent-count"><text class="rent-badge" :class="'rent-' + rentCountLevel(car.rentCount)">{{ car.rentCount || 0 }}</text> 次出租</view>
           </view>
           <view class="car-price-row">
             <view class="car-price">
@@ -523,6 +523,36 @@ function currentTypeLabel(): string {
 .car-rating {
   color: #ff9900;
   font-weight: 500;
+}
+
+.car-rent-count {
+  display: flex;
+  align-items: center;
+}
+
+/* 已租次数分级徽标：high 着重、mid 次重、low 轻微 */
+.rent-badge {
+  font-style: normal;
+  font-weight: 600;
+  padding: 2rpx 12rpx;
+  border-radius: 8rpx;
+  margin-right: 6rpx;
+  font-size: 20rpx;
+  line-height: 1.5;
+}
+.rent-high {
+  color: #ffffff;
+  background: linear-gradient(135deg, #ff2e2e, #d81e1e);
+  box-shadow: 0 2rpx 8rpx rgba(255, 46, 46, 0.35);
+}
+.rent-mid {
+  color: #8a4b00;
+  background: #ffe9c2;
+  border: 1rpx solid #ffc069;
+}
+.rent-low {
+  color: #8f959e;
+  background: #f0f2f5;
 }
 
 .car-price-row {

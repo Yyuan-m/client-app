@@ -9,14 +9,14 @@
  * 加入购物车：校验登录 → 校验 rentDays → cartStore.addItem → 跳 /pages/order/checkout
  */
 import { ref, reactive, computed, watch } from 'vue'
-import { onLoad, onUnload } from '@dcloudio/uni-app'
+import { onLoad, onUnload, onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { useCartStore } from '@/stores/cart'
 import { getCarDetailApi, getCarImagesApi } from '@/api/modules/car'
 import { calcCarPriceApi } from '@/api/modules/price'
 import { resolveAdminImage } from '@/utils/image'
-import { moneyUtil, dateUtil, validators } from '@/utils'
+import { moneyUtil, dateUtil, validators, rentCountLevel, rentDaysLevel } from '@/utils'
 import type { CarDetailVO, CarImageGroupVO, PriceDetailVO, CarConfigVO } from '@/api/types'
 
 const appStore = useAppStore()
@@ -68,7 +68,39 @@ const dateRange = reactive<{ start: string; end: string }>({
   end: ''
 })
 const minRentDays = computed(() => car.value?.minRentDays || 1)
-const maxRentDays = 20
+// 车辆级最大租期（car_info.max_rent_days）；null 表示不限租期
+const maxRentDays = computed<number | null>(() => {
+  const max = Number(car.value?.maxRentDays)
+  return max > 0 ? max : null
+})
+// 是否限制最大租期
+const hasMaxRentLimit = computed(() => maxRentDays.value != null)
+// 最大租期展示文案（着重展示）
+const maxRentText = computed(() => (hasMaxRentLimit.value ? `最长可租 ${maxRentDays.value} 天` : '租期不限'))
+// 长租折扣提示（联动最大租期：不足30天则月租不可达，不足7天则周租不可达）
+const discountTip = computed(() => {
+  if (!car.value) return ''
+  const weekly = Number(car.value.weeklyDiscount || 1)
+  const monthly = Number(car.value.monthlyDiscount || 1)
+  const max = maxRentDays.value
+  const parts = []
+  if (weekly < 1 && (max == null || max >= 7)) parts.push(`7天及以上 ${(weekly * 10).toFixed(1)}折`)
+  if (monthly < 1 && (max == null || max >= 30)) parts.push(`30天及以上 ${(monthly * 10).toFixed(1)}折`)
+  return parts.join(' · ')
+})
+// 月租折扣不可达提示
+const monthlyUnavailableTip = computed(() => {
+  if (!car.value) return ''
+  const monthly = Number(car.value.monthlyDiscount || 1)
+  const max = maxRentDays.value
+  if (monthly < 1 && max != null && max < 30) return `本车最长租期 ${max} 天，不适用月租折扣`
+  return ''
+})
+// 快捷租期选项（按车辆最小/最大租期动态过滤；不限则展示 30 天）
+const quickPickOptions = computed<number[]>(() => {
+  const all = [3, 7, 15, 20, 30]
+  return all.filter((d) => d >= minRentDays.value && (maxRentDays.value == null || d <= maxRentDays.value))
+})
 const minDate = computed(() => {
   // 已出租车辆：availableDate 为最早可租日
   if (car.value?.availableDate) return car.value.availableDate
@@ -104,8 +136,18 @@ const rentDays = computed(() => {
 // 租期是否有效
 const rentDaysValid = computed(() => {
   if (!dateRange.start || !dateRange.end) return false
-  const r = dateUtil.validateRentDays(dateRange.start, dateRange.end, minRentDays.value, maxRentDays)
+  const r = dateUtil.validateRentDays(dateRange.start, dateRange.end, minRentDays.value, maxRentDays.value)
   return r.valid
+})
+
+// 租期无效原因文案（准确提示）
+const rentErrorText = computed(() => {
+  if (!dateRange.start || !dateRange.end) return ''
+  const r = dateUtil.validateRentDays(dateRange.start, dateRange.end, minRentDays.value, maxRentDays.value)
+  if (r.valid) return ''
+  if (rentDays.value < minRentDays.value) return `最少需租 ${minRentDays.value} 天`
+  if (maxRentDays.value != null && rentDays.value > maxRentDays.value) return `最长只能租 ${maxRentDays.value} 天`
+  return r.msg || '租期无效'
 })
 
 onLoad(async (options: Record<string, string> | undefined) => {
@@ -117,6 +159,15 @@ onLoad(async (options: Record<string, string> | undefined) => {
   }
   carId.value = opts.id
   await loadDetail()
+})
+
+onShow(() => {
+  // 初始化悬浮购物车位置（仅首次）
+  initFloatPos()
+  // 展示时刷新购物车数量角标（登录态）
+  if (userStore.isLoggedIn) {
+    cartStore.initCart().catch((e) => console.error('[vehicle.detail] initCart failed:', e))
+  }
 })
 
 onUnload(() => {})
@@ -194,7 +245,7 @@ function onEndDateChange(e: any) {
 
 // 快捷选择 N 天
 function quickPickDays(days: number) {
-  if (days < minRentDays.value || days > maxRentDays) return
+  if (days < minRentDays.value || (maxRentDays.value != null && days > maxRentDays.value)) return
   const today = dateUtil.today()
   dateRange.start = today
   dateRange.end = dateUtil.addDays(today, days)
@@ -212,7 +263,7 @@ async function addToCart() {
   }
   if (!car.value) return
   if (!rentDaysValid.value) {
-    uni.showToast({ title: `请选择有效租期（${minRentDays.value}-${maxRentDays}天）`, icon: 'none' })
+    uni.showToast({ title: rentErrorText.value || '请选择有效租期', icon: 'none' })
     return
   }
   // 已出租车辆：二次校验 availableDate
@@ -245,7 +296,7 @@ async function rentNow() {
   }
   if (!car.value) return
   if (!rentDaysValid.value) {
-    uni.showToast({ title: `请选择有效租期（${minRentDays.value}-${maxRentDays}天）`, icon: 'none' })
+    uni.showToast({ title: rentErrorText.value || '请选择有效租期', icon: 'none' })
     return
   }
   // 已出租车辆：二次校验
@@ -295,10 +346,65 @@ function switchConfigTab(key: string) {
 function goBack() {
   uni.navigateBack({ delta: 1 })
 }
+
+// 快捷跳转购物车（悬浮图标）
+function goCart() {
+  uni.switchTab?.({ url: '/pages/cart/index' } as any) || uni.reLaunch({ url: '/pages/cart/index' })
+}
+
+// ===== 购物车悬浮图标：可拖拽，位置用 px 定位 =====
+const FLOAT_SIZE = 56 // float-cart 的直径（px），需与 CSS 保持一致
+const floatLeft = ref<number | null>(null)
+const floatTop = ref<number | null>(null)
+let touchStartX = 0
+let touchStartY = 0
+
+/** 初始化悬浮图标位置（右下角，避开底部操作栏） */
+function initFloatPos() {
+  if (floatLeft.value !== null) return
+  const sys = uni.getSystemInfoSync()
+  const winW = sys.windowWidth || 375
+  const winH = sys.windowHeight || 667
+  floatLeft.value = Math.max(8, winW - FLOAT_SIZE - 12)
+  // 底部操作栏之上留出间距（操作栏约 120px 逻辑高度）
+  floatTop.value = Math.max(8, winH - 140 - FLOAT_SIZE - 16)
+}
+
+function onFloatTouchStart(e: UniApp.TouchEvent) {
+  initFloatPos()
+  const t = e.touches[0]
+  touchStartX = t.clientX
+  touchStartY = t.clientY
+}
+
+function onFloatTouchMove(e: UniApp.TouchEvent) {
+  const t = e.touches[0]
+  if (floatLeft.value === null || floatTop.value === null) return
+  floatLeft.value += t.clientX - touchStartX
+  floatTop.value += t.clientY - touchStartY
+  // 限制在屏幕范围内
+  const sys = uni.getSystemInfoSync()
+  floatLeft.value = Math.max(0, Math.min(floatLeft.value, (sys.windowWidth || 375) - FLOAT_SIZE))
+  floatTop.value = Math.max(0, Math.min(floatTop.value, (sys.windowHeight || 667) - FLOAT_SIZE))
+  touchStartX = t.clientX
+  touchStartY = t.clientY
+}
 </script>
 
 <template>
   <view class="vehicle-detail-page">
+    <!-- 购物车悬浮按钮（本页无底部 TabBar footer，展示悬浮图标；半透明、可拖拽、显示数量） -->
+    <view
+      class="float-cart"
+      :style="floatLeft !== null ? { left: floatLeft + 'px', top: floatTop + 'px' } : {}"
+      @touchstart="onFloatTouchStart"
+      @touchmove.stop.prevent="onFloatTouchMove"
+      @tap="goCart"
+    >
+      <text class="float-cart-icon">🛒</text>
+      <view v-if="cartStore.totalCount > 0" class="float-cart-badge">{{ cartStore.totalCount > 99 ? '99+' : cartStore.totalCount }}</view>
+    </view>
+
     <!-- 加载中 -->
     <view v-if="loading" class="loading-wrap">
       <u-loading-icon mode="circle" text="加载中..." />
@@ -361,8 +467,9 @@ function goBack() {
           </view>
           <view class="stat-divider"></view>
           <view class="stat">
-            <text class="stat-value">{{ car.rentCount || 0 }}</text>
+            <text class="rent-badge" :class="'rent-' + rentCountLevel(car.rentCount)">{{ car.rentCount || 0 }}</text>
             <text class="stat-label">出租次数</text>
+            <text v-if="car.rentDays" class="rent-days-sub" :class="'rent-' + rentDaysLevel(car.rentDays)">累计 {{ car.rentDays }} 天</text>
           </view>
           <view class="stat-divider"></view>
           <view class="stat">
@@ -384,6 +491,16 @@ function goBack() {
             <text v-if="rentDays > 0" class="rent-days">共 {{ rentDays }} 天</text>
           </view>
         </view>
+
+        <!-- 最大租期着重展示 -->
+        <view class="max-rent-tip" :class="{ unlimited: !hasMaxRentLimit }">
+          <text class="max-rent-tip-icon">⏱</text>
+          <text class="max-rent-tip-text">{{ maxRentText }}</text>
+        </view>
+
+        <!-- 长租折扣提示（联动车辆最大租期） -->
+        <view v-if="discountTip" class="tip tip-discount-static">{{ discountTip }}</view>
+        <view v-if="monthlyUnavailableTip" class="tip tip-monthly-unavailable">{{ monthlyUnavailableTip }}</view>
 
         <!-- 长租折扣 / 节假日溢价 提示 -->
         <view v-if="priceDetail" class="price-tips">
@@ -428,10 +545,10 @@ function goBack() {
           <!-- 快捷选项 -->
           <view class="quick-pick-row">
             <view
-              v-for="d in [3, 7, 15, 20]"
+              v-for="d in quickPickOptions"
               :key="d"
               class="quick-pick"
-              :class="{ disabled: d < minRentDays || d > maxRentDays, active: rentDays === d }"
+              :class="{ disabled: d < minRentDays || (maxRentDays != null && d > maxRentDays), active: rentDays === d }"
               @tap="() => quickPickDays(d)"
             >
               {{ d }}天
@@ -440,7 +557,7 @@ function goBack() {
           <!-- 租期提示 -->
           <view v-if="dateRange.start && dateRange.end" class="rent-days-tip" :class="{ invalid: !rentDaysValid }">
             <text v-if="rentDaysValid">租期 {{ rentDays }} 天</text>
-            <text v-else>租期无效（最少 {{ minRentDays }} 天，最多 {{ maxRentDays }} 天）</text>
+            <text v-else>{{ rentErrorText }}</text>
           </view>
         </view>
 
@@ -512,10 +629,7 @@ function goBack() {
         </view>
       </view>
 
-      <!-- 底部操作栏占位 -->
-      <view class="bottom-placeholder"></view>
-
-      <!-- 底部操作栏 -->
+      <!-- 底部操作栏（固定定位，根元素已用 padding-bottom 预留空间，避免遮挡内容） -->
       <view class="bottom-bar">
         <view class="bottom-price">
           <text v-if="priceDetail" class="bp-main">￥{{ formatPrice(priceDetail.totalAmount) }}</text>
@@ -704,6 +818,40 @@ function goBack() {
   margin-top: 4rpx;
 }
 
+/* 已租次数/天数分级徽标：high 着重、mid 次重、low 轻微 */
+.rent-badge {
+  font-style: normal;
+  font-size: 32rpx;
+  font-weight: 700;
+  padding: 2rpx 16rpx;
+  border-radius: 10rpx;
+  line-height: 1.5;
+}
+.rent-high {
+  color: #ffffff;
+  background: linear-gradient(135deg, #ff2e2e, #d81e1e);
+  box-shadow: 0 2rpx 8rpx rgba(255, 46, 46, 0.35);
+}
+.rent-mid {
+  color: #8a4b00;
+  background: #ffe9c2;
+  border: 1rpx solid #ffc069;
+}
+.rent-low {
+  color: #8f959e;
+  background: #f0f2f5;
+}
+
+.rent-days-sub {
+  font-style: normal;
+  font-size: 20rpx;
+  font-weight: 600;
+  padding: 2rpx 12rpx;
+  border-radius: 8rpx;
+  margin-top: 6rpx;
+  line-height: 1.5;
+}
+
 .stat-divider {
   width: 1rpx;
   height: 64rpx;
@@ -778,6 +926,54 @@ function goBack() {
 .tip-discount { background-color: rgba(7, 193, 96, 0.18); color: #07c160; }
 .tip-holiday { background-color: rgba(255, 153, 0, 0.18); color: #ff9900; }
 .tip-rented { background-color: rgba(255, 46, 46, 0.18); color: #ff2e2e; }
+/* 长租折扣静态提示（未选日期时展示） */
+.tip-discount-static {
+  display: inline-flex;
+  margin-bottom: 12rpx;
+  margin-right: 12rpx;
+  background-color: rgba(255, 46, 46, 0.1);
+  color: #ff2e2e;
+  font-weight: 500;
+}
+/* 月租折扣不可达提示 */
+.tip-monthly-unavailable {
+  display: inline-flex;
+  margin-bottom: 12rpx;
+  margin-right: 12rpx;
+  background-color: rgba(174, 174, 178, 0.12);
+  color: #aeaeb2;
+}
+
+/* 最大租期着重展示 */
+.max-rent-tip {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-bottom: 16rpx;
+  padding: 10rpx 20rpx;
+  border-radius: 8rpx;
+  background: linear-gradient(135deg, #ff2e2e, #d81e1e);
+  box-shadow: 0 4rpx 16rpx rgba(255, 46, 46, 0.35);
+}
+.max-rent-tip-icon {
+  font-size: 26rpx;
+  line-height: 1;
+}
+.max-rent-tip-text {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 1rpx;
+}
+/* 不限租期：绿色弱化 */
+.max-rent-tip.unlimited {
+  background: rgba(7, 193, 96, 0.12);
+  box-shadow: none;
+}
+.max-rent-tip.unlimited .max-rent-tip-text {
+  color: #07c160;
+  font-weight: 500;
+}
 
 .date-pick-section {
   padding: 24rpx 0;
@@ -992,11 +1188,9 @@ function goBack() {
   border-radius: 8rpx;
 }
 
-/* 底部操作栏 */
-.bottom-placeholder {
-  height: 160rpx;
-}
-
+/* 底部操作栏
+   说明：根元素 .vehicle-detail-page 已用 padding-bottom: calc(160rpx + env(safe-area-inset-bottom))
+   预留了固定操作栏的高度，页面内容不会被遮挡，因此无需额外的占位元素。 */
 .bottom-bar {
   position: fixed;
   left: 0;
@@ -1009,41 +1203,87 @@ function goBack() {
   display: flex;
   align-items: center;
   padding-left: 24rpx;
+  padding-right: 24rpx;
+  box-sizing: border-box;
   z-index: 100;
+}
+
+/* 购物车悬浮按钮（半透明、小尺寸、可拖拽；位置由脚本以 left/top 控制，避开底部操作栏） */
+.float-cart {
+  position: fixed;
+  z-index: 200;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: rgba(24, 24, 26, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.float-cart-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.float-cart-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background-color: #ff2e2e;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  box-sizing: border-box;
 }
 
 .bottom-price {
   flex: 0 0 auto;
-  margin-right: 24rpx;
+  margin-right: 20rpx;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  white-space: nowrap;
 }
 
 .bp-main {
   font-size: 40rpx;
   font-weight: 800;
   color: #ff5a3c;
+  line-height: 1;
 }
 
 .bp-unit {
   font-size: 22rpx;
   color: #aeaeb2;
   font-weight: 400;
+  margin-left: 4rpx;
 }
 
 .bottom-btns {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   gap: 16rpx;
 }
 
 .bottom-btn {
-  flex: 1;
-  height: 88rpx;
+  flex: 1 1 0;
+  height: 84rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 28rpx;
   font-weight: 500;
-  border-radius: 8rpx;
+  border-radius: 44rpx;
 }
 
 .btn-cart {

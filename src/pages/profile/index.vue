@@ -87,33 +87,40 @@ onLoad(() => {
 })
 
 onShow(async () => {
-  if (userStore.isLoggedIn) {
-    try {
-      await userStore.fetchUserInfo()
-      await Promise.all([
-        loadRecentOrders(),
-        loadReviewableOrders(),
-        loadCoupons(currentCouponTab.value)
-      ])
-      // 同步 profileForm
-      syncProfileFromUser()
-      syncVerifyFromUser()
-    } catch (e) {
-      console.error('[profile] onShow failed:', e)
-    }
-  } else {
-    // 未登录：跳转登录页
-    uni.showModal({
-      title: '提示',
-      content: '请先登录后访问个人中心',
-      showCancel: false,
-      confirmText: '去登录',
-      success: () => {
-        uni.reLaunch({ url: '/pages/auth/login?redirect=' + encodeURIComponent('/pages/profile/index') })
-      }
-    })
+  if (!userStore.isLoggedIn) {
+    // 未登录：展示游客态（区别于登录态的完整用户卡片），不做强制跳转
+    resetGuestState()
+    return
+  }
+  try {
+    await userStore.fetchUserInfo()
+    await Promise.all([
+      loadRecentOrders(),
+      loadReviewableOrders(),
+      loadCoupons(currentCouponTab.value)
+    ])
+    // 同步 profileForm
+    syncProfileFromUser()
+    syncVerifyFromUser()
+  } catch (e) {
+    console.error('[profile] onShow failed:', e)
   }
 })
+
+/** 未登录时重置各面板，避免显示上一次的残留数据 */
+function resetGuestState() {
+  currentTab.value = 'info'
+  recentOrders.value = []
+  reviewableOrders.value = []
+  ;(['unused', 'locked', 'used', 'expired'] as CouponStatus[]).forEach((k) => {
+    couponsMap[k] = []
+  })
+}
+
+/** 去登录 */
+function goLogin() {
+  uni.navigateTo({ url: '/pages/auth/login?redirect=' + encodeURIComponent('/pages/profile/index') })
+}
 
 function syncProfileFromUser() {
   const u = userStore.user
@@ -442,8 +449,8 @@ watch(
 
 <template>
   <view class="profile-page" :style="{ paddingTop: navTop + 'px' }">
-    <!-- 用户卡片 -->
-    <view class="user-card">
+    <!-- 用户卡片：登录态 / 游客态两种展示，方便区分 -->
+    <view v-if="userStore.isLoggedIn" class="user-card">
       <view class="avatar-wrap" @tap="chooseAvatar">
           <image
             v-if="userStore.user?.avatar && !avatarLoadFailed"
@@ -469,8 +476,22 @@ watch(
       <view class="logout-btn" @tap="onLogout">退出</view>
     </view>
 
-    <!-- Tabs -->
-    <view class="tabs-bar">
+    <!-- 游客态 -->
+    <view v-else class="user-card guest-card">
+      <view class="avatar avatar-default guest-avatar">
+        <text class="avatar-text">👤</text>
+      </view>
+      <view class="user-info">
+        <view class="user-name">未登录</view>
+        <view class="user-meta">
+          <text class="guest-tip">登录后查看订单 / 评价 / 优惠券</text>
+        </view>
+      </view>
+      <view class="login-btn" @tap="goLogin">去登录</view>
+    </view>
+
+    <!-- Tabs（游客态隐藏，仅登录态展示） -->
+    <view v-if="userStore.isLoggedIn" class="tabs-bar">
       <scroll-view scroll-x :show-scrollbar="false">
         <view class="tabs-row">
           <view
@@ -487,8 +508,16 @@ watch(
       </scroll-view>
     </view>
 
-    <!-- Tab 内容 -->
-    <view class="tab-content">
+    <!-- 游客态提示 -->
+    <view v-if="!userStore.isLoggedIn" class="guest-prompt">
+      <view class="guest-icon">🔐</view>
+      <view class="guest-title">登录后使用更多功能</view>
+      <view class="guest-sub">管理个人信息 / 查看订单 / 发表评价 / 领取优惠券</view>
+      <u-button type="primary" shape="square" text="立即登录" class="guest-login-btn" @click="goLogin" />
+    </view>
+
+    <!-- Tab 内容（游客态隐藏） -->
+    <view v-if="userStore.isLoggedIn" class="tab-content">
       <!-- 1. 个人信息 -->
       <view v-if="currentTab === 'info'" class="info-pane">
         <view class="card form-card">
@@ -768,6 +797,64 @@ watch(
   font-size: 24rpx;
   border-radius: 8rpx;
   border: 1rpx solid #ff2e2e;
+}
+
+/* 游客态卡片 */
+.guest-card {
+  background: linear-gradient(135deg, rgba(174, 174, 178, 0.06) 0%, rgba(26, 26, 26, 0.8) 100%);
+}
+
+.guest-avatar {
+  width: 120rpx;
+  height: 120rpx;
+  margin-right: 24rpx;
+  flex-shrink: 0;
+}
+
+.guest-tip {
+  font-size: 24rpx;
+  color: #aeaeb2;
+}
+
+.login-btn {
+  flex-shrink: 0;
+  padding: 12rpx 24rpx;
+  background-color: rgba(255, 46, 46, 0.12);
+  color: #ff2e2e;
+  font-size: 24rpx;
+  border-radius: 8rpx;
+  border: 1rpx solid #ff2e2e;
+}
+
+/* 游客态提示 */
+.guest-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 100rpx 48rpx;
+}
+
+.guest-icon {
+  font-size: 80rpx;
+  margin-bottom: 24rpx;
+}
+
+.guest-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #f5f5f5;
+  margin-bottom: 12rpx;
+}
+
+.guest-sub {
+  font-size: 24rpx;
+  color: #aeaeb2;
+  margin-bottom: 48rpx;
+  text-align: center;
+}
+
+.guest-login-btn {
+  width: 320rpx;
 }
 
 /* Tabs */
