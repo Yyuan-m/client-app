@@ -13,6 +13,8 @@ import { onLoad, onUnload, onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { useCartStore } from '@/stores/cart'
+import { useThemeClass } from '@/composables/useThemeClass'
+import { useNavigationBar } from '@/composables/useNavigationBar'
 import { getCarDetailApi, getCarImagesApi } from '@/api/modules/car'
 import { calcCarPriceApi } from '@/api/modules/price'
 import { resolveAdminImage } from '@/utils/image'
@@ -22,6 +24,11 @@ import type { CarDetailVO, CarImageGroupVO, PriceDetailVO, CarConfigVO } from '@
 const appStore = useAppStore()
 const userStore = useUserStore()
 const cartStore = useCartStore()
+const { themeClass } = useThemeClass()
+/** 原生导航栏随主题切换 */
+useNavigationBar()
+/** 加载动画颜色：随深浅主题切换 */
+const loadingColor = computed(() => (appStore.isDark ? '#aeaeb2' : '#6e6e73'))
 
 const carId = ref<number | string>('')
 const car = ref<CarDetailVO | null>(null)
@@ -284,6 +291,32 @@ async function addToCart() {
   }
 }
 
+// 实名认证拦截：未完成实名与驾驶证认证时只能看车选车，不能下单
+// 返回 true 表示已认证可继续，false 表示已弹窗拦截
+async function checkVerified(): Promise<boolean> {
+  if (userStore.user?.verifyStatus === 'verified') return true
+  // 本地缓存可能过期，刷新一次用户信息确保认证状态准确
+  try {
+    await userStore.fetchUserInfo()
+  } catch (e) {
+    console.error('[vehicle.detail] fetchUserInfo failed:', e)
+  }
+  // 重新读取认证状态（fetchUserInfo 后状态可能已变化，用函数读取避免类型收窄）
+  if (userStore.user && (userStore.user as { verifyStatus?: string }).verifyStatus === 'verified') return true
+  uni.showModal({
+    title: '实名认证提示',
+    content: '需要完成实名与驾驶证信息认证后才能下单租车，是否现在去认证？',
+    confirmText: '去认证',
+    cancelText: '暂不认证',
+    success: (res) => {
+      if (res.confirm) {
+        uni.navigateTo({ url: '/pages/profile/verify' })
+      }
+    }
+  })
+  return false
+}
+
 // 立即租车：加入购物车并跳结算
 async function rentNow() {
   if (!userStore.isLoggedIn) {
@@ -295,6 +328,7 @@ async function rentNow() {
     return
   }
   if (!car.value) return
+  if (!(await checkVerified())) return
   if (!rentDaysValid.value) {
     uni.showToast({ title: rentErrorText.value || '请选择有效租期', icon: 'none' })
     return
@@ -392,7 +426,7 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
 </script>
 
 <template>
-  <view class="vehicle-detail-page">
+  <view class="vehicle-detail-page" :class="themeClass">
     <!-- 购物车悬浮按钮（本页无底部 TabBar footer，展示悬浮图标；半透明、可拖拽、显示数量） -->
     <view
       class="float-cart"
@@ -407,7 +441,7 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
 
     <!-- 加载中 -->
     <view v-if="loading" class="loading-wrap">
-      <u-loading-icon mode="circle" text="加载中..." />
+      <u-loading-icon mode="circle" :color="loadingColor" :textColor="loadingColor" text="加载中..." />
     </view>
 
     <view v-else-if="car">
@@ -663,7 +697,7 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
 <style scoped lang="scss">
 .vehicle-detail-page {
   min-height: 100vh;
-  background-color: #0a0a0a;
+  background-color: var(--page-bg);
   padding-bottom: calc(160rpx + env(safe-area-inset-bottom));
 }
 
@@ -682,7 +716,7 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
 
 .empty-text {
   font-size: 28rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 /* 主图 */
@@ -690,7 +724,7 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
   position: relative;
   width: 100%;
   height: 500rpx;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
 }
 
 .main-swiper {
@@ -726,7 +760,7 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
 
 .status-available { background-color: #07c160; color: #fff; }
 .status-rented { background-color: #ff9900; color: #fff; }
-.status-maintenance { background-color: #6e6e73; color: #fff; }
+.status-maintenance { background-color: var(--text-dim); color: #fff; }
 
 .car-tag {
   position: absolute;
@@ -744,8 +778,8 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
 /* 缩略图 */
 .thumbnail-row {
   padding: 16rpx 24rpx;
-  background-color: #1a1a1a;
-  border-bottom: 1rpx solid #2a2a2a;
+  background-color: var(--card-bg);
+  border-bottom: 1rpx solid var(--border-color);
 }
 
 .thumbnail-list {
@@ -773,21 +807,21 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
 /* 核心信息 */
 .info-card {
   padding: 32rpx 24rpx;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   margin-bottom: 16rpx;
 }
 
 .car-name {
   font-size: 40rpx;
   font-weight: 700;
-  color: #f5f5f5;
+  color: var(--text-main);
   line-height: 1.4;
   margin-bottom: 12rpx;
 }
 
 .car-meta {
   font-size: 26rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-bottom: 24rpx;
 }
 
@@ -795,8 +829,8 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
   display: flex;
   align-items: center;
   padding: 24rpx 0;
-  border-top: 1rpx solid #2a2a2a;
-  border-bottom: 1rpx solid #2a2a2a;
+  border-top: 1rpx solid var(--border-color);
+  border-bottom: 1rpx solid var(--border-color);
 }
 
 .stat {
@@ -814,7 +848,7 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
 
 .stat-label {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-top: 4rpx;
 }
 
@@ -855,22 +889,22 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
 .stat-divider {
   width: 1rpx;
   height: 64rpx;
-  background-color: #2a2a2a;
+  background-color: var(--border-color);
 }
 
 .car-desc {
   font-size: 26rpx;
-  color: #d1d1d6;
+  color: var(--text-sub);
   line-height: 1.8;
   margin-top: 24rpx;
   padding-top: 24rpx;
-  border-top: 1rpx solid #2a2a2a;
+  border-top: 1rpx solid var(--border-color);
 }
 
 /* 租车卡片 */
 .rent-card {
   padding: 32rpx 24rpx;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   margin-bottom: 16rpx;
 }
 
@@ -896,18 +930,18 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
 
 .rent-price-unit {
   font-size: 24rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   font-weight: 400;
 }
 
 .rent-price-loading {
   font-size: 28rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 .rent-days {
   font-size: 24rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 .price-tips {
@@ -941,7 +975,7 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
   margin-bottom: 12rpx;
   margin-right: 12rpx;
   background-color: rgba(174, 174, 178, 0.12);
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 /* 最大租期着重展示 */
@@ -977,12 +1011,12 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
 
 .date-pick-section {
   padding: 24rpx 0;
-  border-top: 1rpx solid #2a2a2a;
+  border-top: 1rpx solid var(--border-color);
 }
 
 .date-pick-title {
   font-size: 28rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   font-weight: 500;
   margin-bottom: 16rpx;
 }
@@ -996,28 +1030,28 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
 .date-pick-item {
   flex: 1;
   padding: 16rpx;
-  background-color: #2a2a2a;
+  background-color: var(--border-color);
   border-radius: 8rpx;
 }
 
 .date-label {
   font-size: 22rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
   margin-bottom: 4rpx;
 }
 
 .date-value {
   font-size: 26rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
 
   &.placeholder {
-    color: #6e6e73;
+    color: var(--text-dim);
   }
 }
 
 .date-arrow {
   font-size: 28rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 .quick-pick-row {
@@ -1031,10 +1065,10 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
   padding: 12rpx 0;
   text-align: center;
   font-size: 24rpx;
-  color: #f5f5f5;
-  background-color: #2a2a2a;
+  color: var(--text-main);
+  background-color: var(--border-color);
   border-radius: 8rpx;
-  border: 1rpx solid #2a2a2a;
+  border: 1rpx solid var(--border-color);
 
   &.active {
     background-color: rgba(255, 46, 46, 0.12);
@@ -1043,7 +1077,7 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
   }
 
   &.disabled {
-    color: #4a4a4a;
+    color: var(--text-dim);
   }
 }
 
@@ -1060,7 +1094,7 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
 .price-detail {
   margin-top: 24rpx;
   padding: 16rpx 24rpx;
-  background-color: #2a2a2a;
+  background-color: var(--border-color);
   border-radius: 8rpx;
   border-left: 4rpx solid #ff2e2e;
 }
@@ -1069,7 +1103,7 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
   display: flex;
   justify-content: space-between;
   font-size: 24rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   padding: 4rpx 0;
 
   &.discount {
@@ -1079,8 +1113,8 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
   &.total {
     margin-top: 8rpx;
     padding-top: 12rpx;
-    border-top: 1rpx dashed #4a4a4a;
-    color: #f5f5f5;
+    border-top: 1rpx dashed var(--border-color);
+    color: var(--text-main);
     font-weight: 600;
     font-size: 28rpx;
   }
@@ -1096,14 +1130,14 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
 /* 配置块 */
 .config-section {
   padding: 32rpx 24rpx;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   margin-bottom: 16rpx;
 }
 
 .section-title {
   font-size: 32rpx;
   font-weight: 600;
-  color: #f5f5f5;
+  color: var(--text-main);
   margin-bottom: 24rpx;
 }
 
@@ -1118,8 +1152,8 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
   flex-shrink: 0;
   padding: 12rpx 24rpx;
   font-size: 24rpx;
-  color: #aeaeb2;
-  background-color: #2a2a2a;
+  color: var(--text-sub);
+  background-color: var(--border-color);
   border-radius: 8rpx;
 
   &.active {
@@ -1137,31 +1171,31 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
   display: flex;
   justify-content: space-between;
   padding: 16rpx 0;
-  border-bottom: 1rpx solid #2a2a2a;
+  border-bottom: 1rpx solid var(--border-color);
 }
 
 .config-name {
   font-size: 26rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 .config-value {
   font-size: 26rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   font-weight: 500;
 }
 
 .config-empty {
   padding: 32rpx 0;
   text-align: center;
-  color: #6e6e73;
+  color: var(--text-dim);
   font-size: 26rpx;
 }
 
 /* 素材照片 */
 .materials-section {
   padding: 32rpx 24rpx;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   margin-bottom: 16rpx;
 }
 
@@ -1171,7 +1205,7 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
 
 .material-title {
   font-size: 28rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   font-weight: 500;
   margin-bottom: 16rpx;
 }
@@ -1198,8 +1232,8 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
   bottom: 0;
   height: calc(140rpx + env(safe-area-inset-bottom));
   padding-bottom: env(safe-area-inset-bottom);
-  background-color: #1a1a1a;
-  border-top: 1rpx solid #2a2a2a;
+  background-color: var(--card-bg);
+  border-top: 1rpx solid var(--border-color);
   display: flex;
   align-items: center;
   padding-left: 24rpx;
@@ -1263,7 +1297,7 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
 
 .bp-unit {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   font-weight: 400;
   margin-left: 4rpx;
 }
@@ -1302,8 +1336,8 @@ function onFloatTouchMove(e: UniApp.TouchEvent) {
   color: #fff;
 
   &.disabled {
-    background-color: #2a2a2a;
-    color: #6e6e73;
+    background-color: var(--border-color);
+    color: var(--text-dim);
   }
 }
 </style>

@@ -153,10 +153,10 @@ function cfg(): Partial<SystemConfigVO> {
 
 <style scoped lang="scss">
 .app-footer {
-  background-color: #0a0a0a;
+  background-color: var(--page-bg);
   padding: 48rpx 32rpx 24rpx;
   margin-top: 48rpx;
-  border-top: 1rpx solid #1f1f1f;
+  border-top: 1rpx solid var(--border-color);
 }
 
 .footer-inner {
@@ -180,13 +180,13 @@ function cfg(): Partial<SystemConfigVO> {
   font-weight: 600;
   letter-spacing: 2rpx;
   text-transform: uppercase;
-  color: #f5f5f5;
+  color: var(--text-main);
   margin-bottom: 8rpx;
 }
 
 .footer-desc {
   font-size: 24rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   line-height: 1.6;
 }
 
@@ -195,7 +195,7 @@ function cfg(): Partial<SystemConfigVO> {
   font-weight: 600;
   letter-spacing: 1rpx;
   text-transform: uppercase;
-  color: #f5f5f5;
+  color: var(--text-main);
   margin-bottom: 8rpx;
   padding-left: 12rpx;
   border-left: 4rpx solid #ff2e2e;
@@ -216,14 +216,14 @@ function cfg(): Partial<SystemConfigVO> {
 
 .footer-link-icon {
   font-size: 26rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
   width: 32rpx;
   text-align: center;
 }
 
 .footer-link-text {
   font-size: 26rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   transition: color 0.2s;
   flex: 1;
 }
@@ -231,36 +231,13 @@ function cfg(): Partial<SystemConfigVO> {
 .footer-bottom {
   margin-top: 32rpx;
   padding-top: 24rpx;
-  border-top: 1rpx solid #1f1f1f;
+  border-top: 1rpx solid var(--border-color);
   text-align: center;
 }
 
 .footer-copy {
   font-size: 22rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
   line-height: 1.6;
-}
-
-/* 亮色主题 */
-:global(page.light) .app-footer {
-  background-color: #ffffff;
-  border-top-color: #e9e9ec;
-}
-:global(page.light) .footer-logo,
-:global(page.light) .footer-title {
-  color: #1d1d1f;
-}
-:global(page.light) .footer-desc,
-:global(page.light) .footer-link-text {
-  color: #6e6e73;
-}
-:global(page.light) .footer-link-icon {
-  color: #8e8e93;
-}
-:global(page.light) .footer-copy {
-  color: #8e8e93;
-}
-:global(page.light) .footer-bottom {
-  border-top-color: #e9e9ec;
 }
 </style>

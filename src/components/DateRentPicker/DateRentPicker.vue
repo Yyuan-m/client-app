@@ -219,7 +219,7 @@ if (startDate.value && endDate.value) {
 .picker-label {
   display: block;
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-bottom: 8rpx;
   letter-spacing: 0.5rpx;
 }
@@ -229,13 +229,13 @@ if (startDate.value && endDate.value) {
   align-items: center;
   justify-content: space-between;
   padding: 16rpx 20rpx;
-  background-color: #1a1a1a;
-  border: 1rpx solid #2a2a2a;
+  background-color: var(--card-bg);
+  border: 1rpx solid var(--border-color);
   border-radius: 8rpx;
 
   &.placeholder {
     .picker-text {
-      color: #6e6e73;
+      color: var(--text-dim);
     }
   }
 
@@ -246,7 +246,7 @@ if (startDate.value && endDate.value) {
 
 .picker-text {
   font-size: 26rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -255,7 +255,7 @@ if (startDate.value && endDate.value) {
 
 .picker-arrow {
   font-size: 24rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-left: 8rpx;
 }
 
@@ -267,7 +267,7 @@ if (startDate.value && endDate.value) {
 
   .picker-sep-text {
     font-size: 24rpx;
-    color: #aeaeb2;
+    color: var(--text-sub);
   }
 }
 
@@ -314,7 +314,7 @@ if (startDate.value && endDate.value) {
 
   .days-label {
     font-size: 26rpx;
-    color: #aeaeb2;
+    color: var(--text-sub);
   }
   .days-num {
     font-size: 36rpx;
@@ -330,28 +330,5 @@ if (startDate.value && endDate.value) {
   background-color: rgba(255, 59, 48, 0.08);
   padding: 4rpx 12rpx;
   border-radius: 4rpx;
-}
-
-/* 亮色主题 */
-:global(page.light) .picker-label,
-:global(page.light) .picker-sep-text,
-:global(page.light) .days-info .days-label {
-  color: #6e6e73;
-}
-:global(page.light) .picker-display {
-  background-color: #ffffff;
-  border-color: #e9e9ec;
-}
-:global(page.light) .picker-text {
-  color: #1d1d1f;
-}
-:global(page.light) .picker-display.placeholder .picker-text {
-  color: #8e8e93;
-}
-:global(page.light) .picker-arrow {
-  color: #8e8e93;
-}
-:global(page.light) .days-info .days-num {
-  color: #ff2e2e;
 }
 </style>

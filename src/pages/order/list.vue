@@ -5,12 +5,20 @@
  * 状态色区分：pending 黄 / renting 红 / completed 绿 / cancelled 灰
  * 卡片点击跳 /pages/order/detail?id=xxx
  */
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { onLoad, onReachBottom } from '@dcloudio/uni-app'
 import { getOrderListApi, cancelOrderApi } from '@/api/modules/order'
 import { resolveAdminImage } from '@/utils/image'
 import { moneyUtil, dateUtil } from '@/utils'
 import type { OrderVO, OrderStatus, PageResult } from '@/api/types'
+import { useThemeClass } from '@/composables/useThemeClass'
+import { useNavigationBar } from '@/composables/useNavigationBar'
+
+const { themeClass, appStore } = useThemeClass()
+/** 加载动画颜色：随深浅主题切换 */
+const loadingColor = computed(() => (appStore.isDark ? '#aeaeb2' : '#6e6e73'))
+/** 原生导航栏随主题切换 */
+useNavigationBar()
 
 interface TabItem {
   label: string
@@ -131,7 +139,7 @@ function formatTime(t?: string): string {
 </script>
 
 <template>
-  <view class="order-list-page">
+  <view class="order-list-page" :class="themeClass">
     <!-- Tabs -->
     <view class="tabs-bar">
       <scroll-view scroll-x :show-scrollbar="false">
@@ -151,7 +159,7 @@ function formatTime(t?: string): string {
 
     <!-- 加载中 + 空列表 -->
     <view v-if="loading && !list.length" class="loading-wrap">
-      <u-loading-icon mode="circle" text="加载中..." />
+      <u-loading-icon mode="circle" text="加载中..." :color="loadingColor" :textColor="loadingColor" />
     </view>
 
     <view v-else-if="!list.length" class="empty-state">
@@ -190,7 +198,7 @@ function formatTime(t?: string): string {
 
       <!-- 加载更多 -->
       <view v-if="loading" class="loadmore">
-        <u-loading-icon mode="circle" text="加载中..." />
+        <u-loading-icon mode="circle" text="加载中..." :color="loadingColor" :textColor="loadingColor" />
       </view>
       <view v-else-if="finished" class="loadmore">
         <view class="loadmore-text">— 已加载全部 —</view>
@@ -212,7 +220,7 @@ function formatTime(t?: string): string {
 <style scoped lang="scss">
 .order-list-page {
   min-height: 100vh;
-  background-color: #0a0a0a;
+  background-color: var(--page-bg);
   padding-bottom: calc(48rpx + env(safe-area-inset-bottom));
 }
 
@@ -221,8 +229,8 @@ function formatTime(t?: string): string {
   position: sticky;
   top: 0;
   z-index: 10;
-  background-color: #0a0a0a;
-  border-bottom: 1rpx solid #2a2a2a;
+  background-color: var(--page-bg);
+  border-bottom: 1rpx solid var(--border-color);
 }
 
 .tabs-row {
@@ -235,10 +243,10 @@ function formatTime(t?: string): string {
   flex-shrink: 0;
   padding: 12rpx 32rpx;
   font-size: 26rpx;
-  color: #aeaeb2;
-  background-color: #1a1a1a;
+  color: var(--text-sub);
+  background-color: var(--card-bg);
   border-radius: 8rpx;
-  border: 1rpx solid #2a2a2a;
+  border: 1rpx solid var(--border-color);
 
   &.active {
     background-color: #ff2e2e;
@@ -262,7 +270,7 @@ function formatTime(t?: string): string {
 
 .empty-text {
   font-size: 28rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
 }
 
 /* 订单列表 */
@@ -271,11 +279,11 @@ function formatTime(t?: string): string {
 }
 
 .order-card {
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   border-radius: 16rpx;
   padding: 24rpx;
   margin-bottom: 24rpx;
-  border: 1rpx solid #2a2a2a;
+  border: 1rpx solid var(--border-color);
 }
 
 .card-header {
@@ -283,13 +291,13 @@ function formatTime(t?: string): string {
   justify-content: space-between;
   align-items: center;
   padding-bottom: 16rpx;
-  border-bottom: 1rpx solid #2a2a2a;
+  border-bottom: 1rpx solid var(--border-color);
   margin-bottom: 16rpx;
 }
 
 .order-no {
   font-size: 22rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
 }
 
 .order-status {
@@ -302,7 +310,7 @@ function formatTime(t?: string): string {
 .status-pending { background-color: rgba(255, 153, 0, 0.18); color: #ff9900; }
 .status-renting { background-color: rgba(255, 46, 46, 0.18); color: #ff2e2e; }
 .status-completed { background-color: rgba(7, 193, 96, 0.18); color: #07c160; }
-.status-cancelled { background-color: rgba(174, 174, 178, 0.18); color: #aeaeb2; }
+.status-cancelled { background-color: rgba(174, 174, 178, 0.18); color: var(--text-dim); }
 
 .card-body {
   display: flex;
@@ -314,7 +322,7 @@ function formatTime(t?: string): string {
   height: 120rpx;
   border-radius: 8rpx;
   flex-shrink: 0;
-  background-color: #2a2a2a;
+  background-color: var(--border-color);
 }
 
 .order-info {
@@ -325,7 +333,7 @@ function formatTime(t?: string): string {
 .car-name {
   font-size: 28rpx;
   font-weight: 500;
-  color: #f5f5f5;
+  color: var(--text-main);
   margin-bottom: 8rpx;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -337,7 +345,7 @@ function formatTime(t?: string): string {
 .order-store,
 .order-time {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-bottom: 4rpx;
 }
 
@@ -348,7 +356,7 @@ function formatTime(t?: string): string {
 
 .amount-label {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-bottom: 4rpx;
 }
 
@@ -363,14 +371,14 @@ function formatTime(t?: string): string {
   gap: 16rpx;
   margin-top: 16rpx;
   padding-top: 16rpx;
-  border-top: 1rpx solid #2a2a2a;
+  border-top: 1rpx solid var(--border-color);
 }
 
 .cancel-btn {
   padding: 12rpx 24rpx;
   font-size: 24rpx;
-  color: #aeaeb2;
-  border: 1rpx solid #2a2a2a;
+  color: var(--text-sub);
+  border: 1rpx solid var(--border-color);
   border-radius: 8rpx;
 }
 
@@ -389,6 +397,6 @@ function formatTime(t?: string): string {
 
 .loadmore-text {
   font-size: 24rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
 }
 </style>

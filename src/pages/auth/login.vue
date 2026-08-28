@@ -4,15 +4,25 @@
  * 原Web: 左侧品牌视觉区 + 右侧表单
  * 业务：username + password + 记住密码（用户名保存到 uni.storage）
  * 登录后跳转 redirect query，默认 /pages/home/index
+ * 微信小程序端：支持获取微信头像昵称，登录成功后自动同步到个人资料
  */
 import { ref, reactive } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useUserStore } from '@/stores/user'
+import { updateProfileApi, updateAvatarApi } from '@/api/modules/user'
 import { storage } from '@/utils'
+import type { WxProfile } from '@/components/WxProfileField/WxProfileField.vue'
+import { useThemeClass } from '@/composables/useThemeClass'
+import { useNavigationBar } from '@/composables/useNavigationBar'
 
 const userStore = useUserStore()
+const { themeClass } = useThemeClass()
+/** 原生导航栏随主题切换 */
+useNavigationBar()
 
 const SAVED_USERNAME_KEY = 'lux_saved_username'
+/** 注册页暂存的微信头像 key（注册成功后保存，登录成功后上传） */
+const WX_PENDING_AVATAR_KEY = 'lux_wx_pending_avatar'
 
 const form = reactive({
   username: '',
@@ -21,6 +31,9 @@ const form = reactive({
 const rememberUsername = ref(false)
 const submitting = ref(false)
 const redirect = ref('/pages/home/index')
+
+/** 微信头像昵称（仅微信小程序端可获取） */
+const wxProfile = ref<WxProfile>({ avatar: '', nickname: '' })
 
 onLoad((options: Record<string, string> | undefined) => {
   const opts = options || {}
@@ -37,6 +50,11 @@ onLoad((options: Record<string, string> | undefined) => {
   if (saved) {
     form.username = saved
     rememberUsername.value = true
+  }
+  // 读取注册页暂存的微信头像
+  const pendingAvatar = storage.get<string>(WX_PENDING_AVATAR_KEY)
+  if (pendingAvatar) {
+    wxProfile.value.avatar = pendingAvatar
   }
 })
 
@@ -67,6 +85,8 @@ async function onSubmit() {
       storage.remove(SAVED_USERNAME_KEY)
     }
     uni.showToast({ title: '登录成功', icon: 'success' })
+    // 微信小程序端：同步微信头像昵称到个人资料（失败不阻断跳转）
+    await syncWxProfile()
     // 跳转 redirect（短延迟等 toast 显示）
     setTimeout(() => {
       // redirect 可能是 tabBar 页面（/pages/home/index 等），优先 reLaunch
@@ -77,6 +97,27 @@ async function onSubmit() {
     // request.ts 已统一 toast 错误
   } finally {
     submitting.value = false
+  }
+}
+
+/** 登录成功后同步微信头像昵称（仅微信小程序端有值时执行） */
+async function syncWxProfile() {
+  const { avatar, nickname } = wxProfile.value
+  if (!avatar && !nickname?.trim()) return
+  try {
+    if (nickname?.trim()) {
+      await updateProfileApi({ nickname: nickname.trim() })
+    }
+    if (avatar) {
+      await updateAvatarApi(avatar)
+    }
+    await userStore.fetchUserInfo()
+    uni.showToast({ title: '已同步微信头像昵称', icon: 'none' })
+  } catch (e) {
+    console.error('[login] syncWxProfile failed:', e)
+  } finally {
+    storage.remove(WX_PENDING_AVATAR_KEY)
+    wxProfile.value = { avatar: '', nickname: '' }
   }
 }
 
@@ -91,11 +132,17 @@ function goForgot() {
 function toggleRemember() {
   rememberUsername.value = !rememberUsername.value
 }
+
+/** 快捷返回首页（首页非 tabBar 页面，用 reLaunch） */
+function goHome() {
+  uni.reLaunch({ url: '/pages/home/index' })
+}
 </script>
 
 <template>
-  <view class="login-page">
-    <view class="brand-header">
+  <view class="login-page" :class="themeClass">
+    <!-- 点击 logo 跳转首页 -->
+    <view class="brand-header" @tap="goHome">
       <view class="brand-title">LUXURY CAR</view>
       <view class="brand-subtitle">大圣玩车 · 豪华车租赁</view>
     </view>
@@ -103,6 +150,9 @@ function toggleRemember() {
     <view class="form-card">
       <view class="form-title">欢迎登录</view>
       <view class="form-subtitle">登录后享受更多专属服务</view>
+
+      <!-- 微信小程序端：获取微信头像昵称，登录后自动同步到个人资料 -->
+      <WxProfileField v-model:profile="wxProfile" />
 
       <view class="form-item">
         <view class="form-label">用户名</view>
@@ -136,7 +186,7 @@ function toggleRemember() {
 <style scoped lang="scss">
 .login-page {
   min-height: 100vh;
-  background: linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%);
+  background: linear-gradient(180deg, var(--page-bg) 0%, var(--card-bg) 100%);
   padding: 96rpx 48rpx calc(48rpx + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
@@ -156,27 +206,27 @@ function toggleRemember() {
 
 .brand-subtitle {
   font-size: 24rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-top: 8rpx;
 }
 
 .form-card {
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   border-radius: 16rpx;
   padding: 48rpx 32rpx;
-  border: 1rpx solid #2a2a2a;
+  border: 1rpx solid var(--border-color);
 }
 
 .form-title {
   font-size: 40rpx;
   font-weight: 700;
-  color: #f5f5f5;
+  color: var(--text-main);
   margin-bottom: 8rpx;
 }
 
 .form-subtitle {
   font-size: 26rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-bottom: 48rpx;
 }
 
@@ -186,7 +236,7 @@ function toggleRemember() {
 
 .form-label {
   font-size: 26rpx;
-  color: #d1d1d6;
+  color: var(--text-sub);
   margin-bottom: 12rpx;
 }
 
@@ -205,7 +255,7 @@ function toggleRemember() {
 .checkbox {
   width: 32rpx;
   height: 32rpx;
-  border: 2rpx solid #6e6e73;
+  border: 2rpx solid var(--text-dim);
   border-radius: 6rpx;
   display: flex;
   align-items: center;
@@ -227,7 +277,7 @@ function toggleRemember() {
 
 .remember-text {
   font-size: 26rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 .forgot-link {
@@ -243,7 +293,7 @@ function toggleRemember() {
   text-align: center;
   margin-top: 32rpx;
   font-size: 26rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 .link {

@@ -11,7 +11,12 @@ import { reactive, ref, onUnmounted } from 'vue'
 import { onLoad, onUnload } from '@dcloudio/uni-app'
 import { sendSmsCodeApi, forgotPasswordApi } from '@/api/modules/auth'
 import { validators } from '@/utils'
+import { useThemeClass } from '@/composables/useThemeClass'
+import { useNavigationBar } from '@/composables/useNavigationBar'
 
+const { themeClass } = useThemeClass()
+/** 原生导航栏随主题切换 */
+useNavigationBar()
 const step = ref(1)
 
 const form = reactive({
@@ -124,7 +129,7 @@ function goStep1() {
 </script>
 
 <template>
-  <view class="forgot-page">
+  <view class="forgot-page" :class="themeClass">
     <view class="brand-header">
       <view class="brand-title">LUXURY CAR</view>
       <view class="brand-subtitle">找回密码</view>
@@ -207,7 +212,7 @@ function goStep1() {
 <style scoped lang="scss">
 .forgot-page {
   min-height: 100vh;
-  background: linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%);
+  background: linear-gradient(180deg, var(--page-bg) 0%, var(--card-bg) 100%);
   padding: 96rpx 48rpx calc(48rpx + env(safe-area-inset-bottom));
 }
 
@@ -225,7 +230,7 @@ function goStep1() {
 
 .brand-subtitle {
   font-size: 26rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-top: 8rpx;
 }
 
@@ -247,19 +252,19 @@ function goStep1() {
     width: 64rpx;
     height: 64rpx;
     border-radius: 50%;
-    background-color: #2a2a2a;
-    color: #6e6e73;
+    background-color: var(--border-color);
+    color: var(--text-dim);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 28rpx;
     font-weight: 700;
-    border: 2rpx solid #2a2a2a;
+    border: 2rpx solid var(--border-color);
   }
 
   .step-text {
     font-size: 22rpx;
-    color: #6e6e73;
+    color: var(--text-dim);
     margin-top: 8rpx;
   }
 
@@ -276,7 +281,7 @@ function goStep1() {
 
   &.done {
     .step-num {
-      background-color: #1a1a1a;
+      background-color: var(--card-bg);
       color: #ff2e2e;
       border-color: #ff2e2e;
     }
@@ -286,7 +291,7 @@ function goStep1() {
 .step-line {
   flex: 1;
   height: 2rpx;
-  background-color: #2a2a2a;
+  background-color: var(--border-color);
   margin: 0 8rpx;
   position: relative;
   top: -16rpx;
@@ -297,10 +302,10 @@ function goStep1() {
 }
 
 .form-card {
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   border-radius: 16rpx;
   padding: 48rpx 32rpx;
-  border: 1rpx solid #2a2a2a;
+  border: 1rpx solid var(--border-color);
   min-height: 480rpx;
 }
 
@@ -312,13 +317,13 @@ function goStep1() {
 .form-title {
   font-size: 36rpx;
   font-weight: 700;
-  color: #f5f5f5;
+  color: var(--text-main);
   margin-bottom: 8rpx;
 }
 
 .form-subtitle {
   font-size: 26rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-bottom: 40rpx;
 }
 
@@ -328,7 +333,7 @@ function goStep1() {
 
 .form-label {
   font-size: 26rpx;
-  color: #d1d1d6;
+  color: var(--text-sub);
   margin-bottom: 12rpx;
 }
 
@@ -355,8 +360,8 @@ function goStep1() {
   min-width: 180rpx;
 
   &.disabled {
-    background-color: #2a2a2a;
-    color: #6e6e73;
+    background-color: var(--border-color);
+    color: var(--text-dim);
   }
 }
 
@@ -398,13 +403,13 @@ function goStep1() {
 .success-title {
   font-size: 36rpx;
   font-weight: 700;
-  color: #f5f5f5;
+  color: var(--text-main);
   margin-bottom: 8rpx;
 }
 
 .success-subtitle {
   font-size: 26rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-bottom: 48rpx;
 }
 </style>

@@ -10,6 +10,7 @@
 import { computed, ref } from 'vue'
 import { useCartStore } from '@/stores/cart'
 import { useUserStore } from '@/stores/user'
+import { useAppStore } from '@/stores/app'
 
 interface TabItem {
   pagePath: string
@@ -26,6 +27,7 @@ const props = defineProps<{
 
 const cartStore = useCartStore()
 const userStore = useUserStore()
+const appStore = useAppStore()
 
 const tabs = computed<TabItem[]>(() => [
   {
@@ -37,8 +39,8 @@ const tabs = computed<TabItem[]>(() => [
   {
     pagePath: 'pages/vehicle/list',
     text: '车辆',
-    icon: 'search',
-    activeIcon: 'search'
+    icon: 'car',
+    activeIcon: 'car-fill'
   },
   {
     pagePath: 'pages/cart/index',
@@ -49,7 +51,7 @@ const tabs = computed<TabItem[]>(() => [
   },
   {
     pagePath: 'pages/profile/index',
-    text: '我的',
+    text: '个人中心',
     icon: 'account',
     activeIcon: 'account-fill'
   }
@@ -72,7 +74,7 @@ const showBadge = ref(true)
 </script>
 
 <template>
-  <view class="tabbar">
+  <view class="tabbar" :class="{ 'theme-light': !appStore.isDark }">
     <view
       v-for="(tab, idx) in tabs"
       :key="tab.pagePath"
@@ -81,20 +83,17 @@ const showBadge = ref(true)
       @tap="onTabClick(tab)"
     >
       <view class="tabbar-icon-wrap">
-        <text
-          class="tabbar-icon"
-          :class="idx === activeIndex ? tab.activeIcon : tab.icon"
-          v-if="false"
-        ></text>
-        <!-- 简单文字图标占位（无 PNG 资源时使用） -->
-        <view class="tabbar-icon-text" :class="{ active: idx === activeIndex }">
-          {{ tab.text.charAt(0) }}
-        </view>
+        <!-- uview-plus 官方图标：上方图标，下方小字 -->
+        <u-icon
+          :name="idx === activeIndex ? tab.activeIcon : tab.icon"
+          color="currentColor"
+          size="46rpx"
+        ></u-icon>
         <view v-if="tab.badge && tab.badge > 0" class="tabbar-badge">
           {{ tab.badge > 99 ? '99+' : tab.badge }}
         </view>
       </view>
-      <text class="tabbar-text" :class="{ active: idx === activeIndex }">{{ tab.text }}</text>
+      <text class="tabbar-text">{{ tab.text }}</text>
     </view>
   </view>
 </template>
@@ -119,14 +118,15 @@ const showBadge = ref(true)
     align-items: center;
     justify-content: center;
     padding: 12rpx 0;
+    color: #aeaeb2;
+    transition: color 0.2s;
 
     &.active {
-      .tabbar-icon-text {
-        color: #ff2e2e;
-      }
-      .tabbar-text {
-        color: #ff2e2e;
-      }
+      color: #ff2e2e;
+    }
+
+    .tabbar-text {
+      color: inherit;
     }
   }
 
@@ -140,25 +140,9 @@ const showBadge = ref(true)
     margin-bottom: 4rpx;
   }
 
-  .tabbar-icon-text {
-    font-size: 32rpx;
-    color: #aeaeb2;
-    font-weight: 600;
-    transition: color 0.2s;
-
-    &.active {
-      color: #ff2e2e;
-    }
-  }
-
   .tabbar-text {
     font-size: 22rpx;
-    color: #aeaeb2;
     transition: color 0.2s;
-
-    &.active {
-      color: #ff2e2e;
-    }
   }
 
   .tabbar-badge {
@@ -177,18 +161,15 @@ const showBadge = ref(true)
   }
 }
 
-/* 亮色主题 */
-:global(page.light) .tabbar {
+/* 浅色主题（根元素 class，小程序端 page 无法加 class） */
+.tabbar.theme-light {
   background-color: #ffffff;
   border-top-color: #e9e9ec;
 
-  .tabbar-icon-text,
-  .tabbar-text {
+  .tabbar-item {
     color: #6e6e73;
-  }
-  .tabbar-item.active {
-    .tabbar-icon-text,
-    .tabbar-text {
+
+    &.active {
       color: #ff2e2e;
     }
   }

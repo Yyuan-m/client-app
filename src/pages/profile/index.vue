@@ -1,414 +1,131 @@
 <script setup lang="ts">
 /**
- * 个人中心 - 综合页
- * 原Web: 左侧粘性侧边栏（用户卡片+5项菜单），右侧按 tab 切换
- * 移动端：单列 + 顶部 Tabs（info/orders/reviews/verify/coupons）
+ * 个人中心 - 主页（竖向分组菜单）
  *
- * API: updateProfileApi / updateAvatarApi / uploadImageApi / getMyCouponsApi / getOrderListApi({status:'all',page:1,pageSize:3},{noDedup:true}) / getReviewableOrdersApi
- * 头像上传：uni.chooseImage + updateAvatarApi(filePath) → fetchUserInfo
- * 实名认证：4张图片上传（idCardFront/idCardBack/driverLicenseFront/driverLicenseBack）
- * 出生日期禁未来，驾驶证过期禁过去
+ * 布局：顶部用户卡片（登录态/游客态）+ 竖向分组菜单
+ * 每个菜单项点击后跳转独立页面查看或编辑内容：
+ * - 订单服务：我的订单（order/list）、我的评价（profile/reviews）
+ * - 我的资产：我的优惠券（profile/coupons）
+ * - 个人资料：个人信息（profile/info）、实名认证（profile/verify）
+ * - 其他：设置（profile/settings）
+ *
+ * API: getReviewableOrdersApi（评价角标数量）
  */
-import { ref, reactive, computed, watch } from 'vue'
-import { onShow, onLoad } from '@dcloudio/uni-app'
+import { computed, ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/stores/user'
-import { useAppStore } from '@/stores/app'
-import { updateProfileApi, updateAvatarApi, uploadImageApi } from '@/api/modules/user'
-import { getMyCouponsApi } from '@/api/modules/coupon'
-import { getOrderListApi, getReviewableOrdersApi } from '@/api/modules/order'
-import { resolveClientImage, resolveAdminImage } from '@/utils/image'
-import { moneyUtil, dateUtil, validators } from '@/utils'
+import { getReviewableOrdersApi } from '@/api/modules/order'
+import { resolveClientImage } from '@/utils/image'
+import { getLevelRule } from '@/utils/memberLevel'
 import { getCustomNavTopOffset } from '@/utils/navbar'
-import type { MemberInfoVO, MemberCouponVO, OrderVO, PageResult, OrderStatus } from '@/api/types'
-
-type TabKey = 'info' | 'orders' | 'reviews' | 'verify' | 'coupons'
-type CouponStatus = 'unused' | 'locked' | 'used' | 'expired'
+import { useThemeClass } from '@/composables/useThemeClass'
+import { useNavigationBar } from '@/composables/useNavigationBar'
+import type { OrderVO } from '@/api/types'
 
 /** 自定义导航栏：顶部避开微信胶囊按钮 */
 const navTop = getCustomNavTopOffset()
 
+const { themeClass } = useThemeClass()
+/** 自定义导航页同步状态栏文字/胶囊颜色随主题 */
+useNavigationBar()
 const userStore = useUserStore()
-const appStore = useAppStore()
 
-const tabs = [
-  { key: 'info' as TabKey, label: '个人信息' },
-  { key: 'orders' as TabKey, label: '我的订单' },
-  { key: 'reviews' as TabKey, label: '去评价' },
-  { key: 'verify' as TabKey, label: '实名认证' },
-  { key: 'coupons' as TabKey, label: '我的优惠券' }
-]
+// 可评价订单数（角标）
+const reviewCount = ref(0)
 
-const couponTabs = [
-  { key: 'unused' as CouponStatus, label: '未使用' },
-  { key: 'locked' as CouponStatus, label: '已锁定' },
-  { key: 'used' as CouponStatus, label: '已使用' },
-  { key: 'expired' as CouponStatus, label: '已过期' }
-]
+// 图片加载失败兜底：避免裂图，明确失败态
+const avatarLoadFailed = ref(false)
 
-const currentTab = ref<TabKey>('info')
-const currentCouponTab = ref<CouponStatus>('unused')
+interface MenuItem {
+  key: string
+  label: string
+  icon: string
+  url: string
+  /** 右侧展示的值（如认证状态） */
+  value?: string
+  valueClass?: string
+  /** 角标数字 */
+  badge?: number
+  /** 会员等级 tag 渐变色（我的会员菜单项专用） */
+  levelGrad?: [string, string]
+}
 
-// 用户信息编辑
-const profileForm = reactive<MemberInfoVO>({})
-const savingProfile = ref(false)
+interface MenuGroup {
+  title: string
+  items: MenuItem[]
+}
 
-// 我的订单（imgError 为图片加载失败标记，供模板 v-if/v-else 兜底）
-type OrderWithImg = OrderVO & { imgError?: boolean }
-const recentOrders = ref<OrderWithImg[]>([])
-
-// 可评价订单
-const reviewableOrders = ref<OrderWithImg[]>([])
-const reviewCount = computed(() => reviewableOrders.value.length)
-
-// 优惠券分组
-const couponsMap = reactive<Record<CouponStatus, MemberCouponVO[]>>({
-  unused: [],
-  locked: [],
-  used: [],
-  expired: []
-})
-
-// 实名认证表单
-const verifyForm = reactive({
-  realName: '',
-  idCard: '',
-  driverLicense: '',
-  birthDate: '',
-  driverLicenseExpire: '',
-  idCardFront: '',
-  idCardBack: '',
-  driverLicenseFront: '',
-  driverLicenseBack: ''
-})
-const savingVerify = ref(false)
-
-onLoad(() => {
-  // 初始化
-})
+const menuGroups = computed<MenuGroup[]>(() => [
+  {
+    title: '订单服务',
+    items: [
+      { key: 'orders', label: '我的订单', icon: 'order', url: '/pages/order/list' },
+      { key: 'appointments', label: '我的预约', icon: 'calendar', url: '/pages/profile/appointments' },
+      {
+        key: 'reviews',
+        label: '我的评价',
+        icon: 'star',
+        url: '/pages/profile/reviews',
+        badge: reviewCount.value
+      }
+    ]
+  },
+  {
+    title: '我的资产',
+    items: [{ key: 'coupons', label: '我的优惠券', icon: 'coupon', url: '/pages/profile/coupons' }]
+  },
+  {
+    title: '个人资料',
+    items: [
+      { key: 'info', label: '个人信息', icon: 'account', url: '/pages/profile/info' },
+      {
+        key: 'member',
+        label: '我的会员',
+        icon: 'star',
+        url: '/pages/profile/member',
+        levelGrad: getLevelRule(userStore.user?.level).grad
+      },
+      {
+        key: 'verify',
+        label: '实名认证',
+        icon: 'fingerprint',
+        url: '/pages/profile/verify',
+        value: verifyStatusText(userStore.user?.verifyStatus),
+        valueClass: verifyStatusClass(userStore.user?.verifyStatus)
+      }
+    ]
+  },
+  {
+    title: '其他',
+    items: [{ key: 'settings', label: '设置', icon: 'setting', url: '/pages/profile/settings' }]
+  }
+])
 
 onShow(async () => {
-  if (!userStore.isLoggedIn) {
-    // 未登录：展示游客态（区别于登录态的完整用户卡片），不做强制跳转
-    resetGuestState()
-    return
-  }
+  avatarLoadFailed.value = false
+  if (!userStore.isLoggedIn) return
   try {
     await userStore.fetchUserInfo()
-    await Promise.all([
-      loadRecentOrders(),
-      loadReviewableOrders(),
-      loadCoupons(currentCouponTab.value)
-    ])
-    // 同步 profileForm
-    syncProfileFromUser()
-    syncVerifyFromUser()
+    reviewCount.value = ((await getReviewableOrdersApi()) as OrderVO[])?.length || 0
   } catch (e) {
     console.error('[profile] onShow failed:', e)
   }
 })
-
-/** 未登录时重置各面板，避免显示上一次的残留数据 */
-function resetGuestState() {
-  currentTab.value = 'info'
-  recentOrders.value = []
-  reviewableOrders.value = []
-  ;(['unused', 'locked', 'used', 'expired'] as CouponStatus[]).forEach((k) => {
-    couponsMap[k] = []
-  })
-}
 
 /** 去登录 */
 function goLogin() {
   uni.navigateTo({ url: '/pages/auth/login?redirect=' + encodeURIComponent('/pages/profile/index') })
 }
 
-function syncProfileFromUser() {
-  const u = userStore.user
-  if (!u) return
-  profileForm.nickname = u.nickname || ''
-  profileForm.phone = u.phone || ''
-  profileForm.email = u.email || ''
-  profileForm.realName = u.realName || ''
-}
-
-function syncVerifyFromUser() {
-  const u = userStore.user
-  if (!u) return
-  verifyForm.realName = u.realName || ''
-  verifyForm.idCard = u.idCard || ''
-  verifyForm.driverLicense = u.driverLicense || ''
-  verifyForm.birthDate = u.birthDate || ''
-  verifyForm.driverLicenseExpire = u.driverLicenseExpire || ''
-  verifyForm.idCardFront = u.idCardFront || ''
-  verifyForm.idCardBack = u.idCardBack || ''
-  verifyForm.driverLicenseFront = u.driverLicenseFront || ''
-  verifyForm.driverLicenseBack = u.driverLicenseBack || ''
-}
-
-// 加载最近订单
-async function loadRecentOrders() {
-  try {
-    const res: PageResult<OrderVO> = await getOrderListApi(
-      { status: 'all', page: 1, pageSize: 3 },
-      { noDedup: true }
-    )
-    recentOrders.value = res.list || []
-  } catch (e) {
-    console.error('[profile] loadRecentOrders failed:', e)
-  }
-}
-
-// 加载可评价订单
-async function loadReviewableOrders() {
-  try {
-    reviewableOrders.value = (await getReviewableOrdersApi()) || []
-  } catch (e) {
-    console.error('[profile] loadReviewableOrders failed:', e)
-  }
-}
-
-// 加载优惠券
-async function loadCoupons(status: CouponStatus) {
-  try {
-    const list = await getMyCouponsApi(status)
-    couponsMap[status] = list || []
-  } catch (e) {
-    console.error('[profile] loadCoupons failed:', e)
-    couponsMap[status] = []
-  }
-}
-
-function switchTab(tab: TabKey) {
-  currentTab.value = tab
-  if (tab === 'coupons') {
-    loadCoupons(currentCouponTab.value)
-  } else if (tab === 'orders') {
-    loadRecentOrders()
-  } else if (tab === 'reviews') {
-    loadReviewableOrders()
-  } else if (tab === 'info') {
-    syncProfileFromUser()
-  } else if (tab === 'verify') {
-    syncVerifyFromUser()
-  }
-}
-
-function switchCouponTab(tab: CouponStatus) {
-  currentCouponTab.value = tab
-  loadCoupons(tab)
-}
-
-// 头像上传
-function chooseAvatar() {
-  uni.chooseImage({
-    count: 1,
-    sizeType: ['compressed'],
-    sourceType: ['album', 'camera'],
-    success: async (res) => {
-      const filePath = res.tempFilePaths[0]
-      if (!filePath) return
-      uni.showLoading({ title: '上传中...' })
-      try {
-        await updateAvatarApi(filePath)
-        uni.showToast({ title: '头像更新成功', icon: 'success' })
-        await userStore.fetchUserInfo()
-      } catch (e) {
-        console.error('[profile] avatar upload failed:', e)
-      } finally {
-        uni.hideLoading()
-      }
+/** 点击菜单跳转新页面 */
+function onMenuClick(item: MenuItem) {
+  uni.navigateTo({
+    url: item.url,
+    fail: (err) => {
+      console.error('[profile] navigate failed:', err)
+      uni.showToast({ title: '页面跳转失败', icon: 'none' })
     }
   })
-}
-
-// 保存个人信息
-async function saveProfile() {
-  if (!profileForm.nickname?.trim()) {
-    uni.showToast({ title: '请输入昵称', icon: 'none' })
-    return
-  }
-  if (profileForm.phone && !validators.isPhone(profileForm.phone)) {
-    uni.showToast({ title: '请输入正确的手机号', icon: 'none' })
-    return
-  }
-  if (profileForm.email && !validators.isEmail(profileForm.email)) {
-    uni.showToast({ title: '请输入正确的邮箱', icon: 'none' })
-    return
-  }
-  savingProfile.value = true
-  try {
-    await updateProfileApi({
-      nickname: profileForm.nickname.trim(),
-      phone: profileForm.phone?.trim() || undefined,
-      email: profileForm.email?.trim() || undefined
-    })
-    uni.showToast({ title: '保存成功', icon: 'success' })
-    await userStore.fetchUserInfo()
-  } catch (e) {
-    console.error('[profile] saveProfile failed:', e)
-  } finally {
-    savingProfile.value = false
-  }
-}
-
-// 实名认证图片上传
-function chooseVerifyImage(field: keyof typeof verifyForm) {
-  uni.chooseImage({
-    count: 1,
-    sizeType: ['compressed'],
-    sourceType: ['album', 'camera'],
-    success: async (res) => {
-      const filePath = res.tempFilePaths[0]
-      if (!filePath) return
-      uni.showLoading({ title: '上传中...' })
-      try {
-        const result = await uploadImageApi(filePath)
-        verifyForm[field] = result.url
-        uni.showToast({ title: '上传成功', icon: 'success' })
-      } catch (e) {
-        console.error('[profile] upload failed:', e)
-      } finally {
-        uni.hideLoading()
-      }
-    }
-  })
-}
-
-// 保存实名认证
-async function saveVerify() {
-  if (!verifyForm.realName.trim()) {
-    uni.showToast({ title: '请输入真实姓名', icon: 'none' })
-    return
-  }
-  if (!validators.isIdCard(verifyForm.idCard)) {
-    uni.showToast({ title: '请输入正确的身份证号', icon: 'none' })
-    return
-  }
-  if (!verifyForm.driverLicense.trim()) {
-    uni.showToast({ title: '请输入驾驶证号', icon: 'none' })
-    return
-  }
-  if (!verifyForm.idCardFront || !verifyForm.idCardBack || !verifyForm.driverLicenseFront || !verifyForm.driverLicenseBack) {
-    uni.showToast({ title: '请上传完整的证件照片', icon: 'none' })
-    return
-  }
-  // 出生日期禁未来
-  if (verifyForm.birthDate) {
-    if (verifyForm.birthDate > dateUtil.today()) {
-      uni.showToast({ title: '出生日期不能晚于今天', icon: 'none' })
-      return
-    }
-  }
-  // 驾驶证过期禁过去
-  if (verifyForm.driverLicenseExpire) {
-    if (verifyForm.driverLicenseExpire < dateUtil.today()) {
-      uni.showToast({ title: '驾驶证已过期，请更新有效日期', icon: 'none' })
-      return
-    }
-  }
-  savingVerify.value = true
-  try {
-    await updateProfileApi({
-      realName: verifyForm.realName.trim(),
-      idCard: verifyForm.idCard.trim(),
-      driverLicense: verifyForm.driverLicense.trim(),
-      birthDate: verifyForm.birthDate || undefined,
-      driverLicenseExpire: verifyForm.driverLicenseExpire || undefined,
-      idCardFront: verifyForm.idCardFront,
-      idCardBack: verifyForm.idCardBack,
-      driverLicenseFront: verifyForm.driverLicenseFront,
-      driverLicenseBack: verifyForm.driverLicenseBack
-    })
-    uni.showToast({ title: '保存成功', icon: 'success' })
-    await userStore.fetchUserInfo()
-  } catch (e) {
-    console.error('[profile] saveVerify failed:', e)
-  } finally {
-    savingVerify.value = false
-  }
-}
-
-// 退出登录
-function onLogout() {
-  uni.showModal({
-    title: '退出登录',
-    content: '确定要退出登录吗？',
-    success: async (res) => {
-      if (!res.confirm) return
-      try {
-        await userStore.logout()
-        uni.showToast({ title: '已退出登录', icon: 'success' })
-        setTimeout(() => {
-          uni.reLaunch({ url: '/pages/home/index' })
-        }, 600)
-      } catch (e) {
-        console.error('[profile] logout failed:', e)
-      }
-    }
-  })
-}
-
-// 跳转
-function goOrderList() {
-  uni.navigateTo({ url: '/pages/order/list' })
-}
-
-function goOrderDetail(order: OrderVO) {
-  uni.navigateTo({ url: `/pages/order/detail?id=${order.id}` })
-}
-
-function goVehicleList() {
-  uni.reLaunch({ url: '/pages/vehicle/list' })
-}
-
-function previewImage(url: string) {
-  if (!url) return
-  appStore.openImagePreview([resolveClientImage(url)], 0)
-}
-
-function previewVerifyImage(field: keyof typeof verifyForm) {
-  const url = verifyForm[field]
-  if (!url) return
-  appStore.openImagePreview([resolveClientImage(url)], 0)
-}
-
-// 优惠券展示
-function couponFaceValue(c: MemberCouponVO): string {
-  const type = c.couponType || c.type
-  const v = Number(c.couponValue ?? c.value ?? 0)
-  if (type === 'discount') {
-    const t = v * 10
-    return `${Number.isInteger(t) ? t : t.toFixed(1)}折`
-  }
-  if (type === 'deduction' || type === 'reduction') return `减￥${moneyUtil.format(v)}`
-  if (type === 'duration') return `免${v || 1}天`
-  return '优惠'
-}
-
-function formatPrice(p: number | null | undefined): string {
-  return moneyUtil.format(Number(p || 0))
-}
-
-function statusText(status: OrderStatus): string {
-  if (status === 'pending') return '待支付'
-  if (status === 'renting') return '租赁中'
-  if (status === 'completed') return '已完成'
-  if (status === 'cancelled') return '已取消'
-  return status
-}
-
-function statusClass(status: OrderStatus): string {
-  if (status === 'pending') return 'status-pending'
-  if (status === 'renting') return 'status-renting'
-  if (status === 'completed') return 'status-completed'
-  if (status === 'cancelled') return 'status-cancelled'
-  return ''
-}
-
-function reviewStatusText(s?: string): string {
-  if (s === 'unreviewed') return '待评价'
-  if (s === 'reviewed') return '可追评'
-  return '—'
 }
 
 function verifyStatusText(s?: string): string {
@@ -420,49 +137,32 @@ function verifyStatusText(s?: string): string {
 }
 
 function verifyStatusClass(s?: string): string {
-  if (s === 'verified') return 'verify-verified'
-  if (s === 'pending') return 'verify-pending'
-  if (s === 'rejected') return 'verify-rejected'
-  return 'verify-unverified'
+  if (s === 'verified') return 'v-verified'
+  if (s === 'pending') return 'v-pending'
+  if (s === 'rejected') return 'v-rejected'
+  return 'v-unverified'
 }
-
-const todayStr = dateUtil.today()
-
-// 图片加载失败兜底：避免裂图，明确失败态（与 list.vue / home 一致的 @error 策略）
-const avatarLoadFailed = ref(false)
-function onAvatarError(): void {
-  avatarLoadFailed.value = true
-}
-function onOrderImgError(order: OrderWithImg): void {
-  order.imgError = true
-}
-
-// 监听 user 变化时同步
-watch(
-  () => userStore.user,
-  () => {
-    syncProfileFromUser()
-    syncVerifyFromUser()
-  }
-)
 </script>
 
 <template>
-  <view class="profile-page" :style="{ paddingTop: navTop + 'px' }">
-    <!-- 用户卡片：登录态 / 游客态两种展示，方便区分 -->
-    <view v-if="userStore.isLoggedIn" class="user-card">
-      <view class="avatar-wrap" @tap="chooseAvatar">
-          <image
-            v-if="userStore.user?.avatar && !avatarLoadFailed"
-            :src="resolveClientImage(userStore.user.avatar)"
-            mode="aspectFill"
-            class="avatar"
-            @error="onAvatarError"
-          />
+  <view class="profile-page" :class="themeClass" :style="{ paddingTop: navTop + 'px' }">
+    <view class="page-header">
+      <text class="header-title">个人中心</text>
+    </view>
+
+    <!-- 用户卡片：登录态 -->
+    <view v-if="userStore.isLoggedIn" class="user-card" @tap="onMenuClick({ key: 'info', label: '', icon: '', url: '/pages/profile/info' })">
+      <view class="avatar-wrap">
+        <image
+          v-if="userStore.user?.avatar && !avatarLoadFailed"
+          :src="resolveClientImage(userStore.user.avatar)"
+          mode="aspectFill"
+          class="avatar"
+          @error="avatarLoadFailed = true"
+        />
         <view v-else class="avatar avatar-default">
           <text class="avatar-text">{{ (userStore.user?.nickname || 'U').charAt(0).toUpperCase() }}</text>
         </view>
-        <view class="avatar-edit">编辑</view>
       </view>
       <view class="user-info">
         <view class="user-name">{{ userStore.user?.nickname || userStore.user?.phone || '用户' }}</view>
@@ -473,13 +173,15 @@ watch(
           <text v-if="userStore.user?.phone" class="user-phone">{{ userStore.user.phone }}</text>
         </view>
       </view>
-      <view class="logout-btn" @tap="onLogout">退出</view>
+      <u-icon name="arrow-right" color="#6e6e73" size="28rpx"></u-icon>
     </view>
 
-    <!-- 游客态 -->
+    <!-- 用户卡片：游客态 -->
     <view v-else class="user-card guest-card">
-      <view class="avatar avatar-default guest-avatar">
-        <text class="avatar-text">👤</text>
+      <view class="avatar-wrap">
+        <view class="avatar avatar-default">
+          <u-icon name="account" color="#6e6e73" size="56rpx"></u-icon>
+        </view>
       </view>
       <view class="user-info">
         <view class="user-name">未登录</view>
@@ -487,208 +189,42 @@ watch(
           <text class="guest-tip">登录后查看订单 / 评价 / 优惠券</text>
         </view>
       </view>
-      <view class="login-btn" @tap="goLogin">去登录</view>
+      <view class="login-btn" @tap.stop="goLogin">去登录</view>
     </view>
 
-    <!-- Tabs（游客态隐藏，仅登录态展示） -->
-    <view v-if="userStore.isLoggedIn" class="tabs-bar">
-      <scroll-view scroll-x :show-scrollbar="false">
-        <view class="tabs-row">
+    <!-- 竖向分组菜单（未登录仅展示分组结构，点击由路由拦截器引导登录） -->
+    <view class="menu-area">
+      <view v-for="group in menuGroups" :key="group.title" class="menu-group">
+        <view class="group-title">{{ group.title }}</view>
+        <view class="group-card">
           <view
-            v-for="tab in tabs"
-            :key="tab.key"
-            class="tab-item"
-            :class="{ active: currentTab === tab.key, badge: tab.key === 'reviews' && reviewCount > 0 }"
-            @tap="switchTab(tab.key)"
+            v-for="(item, idx) in group.items"
+            :key="item.key"
+            class="menu-item"
+            :class="{ 'no-border': idx === group.items.length - 1 }"
+            @tap="onMenuClick(item)"
           >
-            {{ tab.label }}
-            <text v-if="tab.key === 'reviews' && reviewCount > 0" class="tab-badge">{{ reviewCount }}</text>
-          </view>
-        </view>
-      </scroll-view>
-    </view>
-
-    <!-- 游客态提示 -->
-    <view v-if="!userStore.isLoggedIn" class="guest-prompt">
-      <view class="guest-icon">🔐</view>
-      <view class="guest-title">登录后使用更多功能</view>
-      <view class="guest-sub">管理个人信息 / 查看订单 / 发表评价 / 领取优惠券</view>
-      <u-button type="primary" shape="square" text="立即登录" class="guest-login-btn" @click="goLogin" />
-    </view>
-
-    <!-- Tab 内容（游客态隐藏） -->
-    <view v-if="userStore.isLoggedIn" class="tab-content">
-      <!-- 1. 个人信息 -->
-      <view v-if="currentTab === 'info'" class="info-pane">
-        <view class="card form-card">
-          <view class="form-item">
-            <view class="form-label">昵称</view>
-            <u-input v-model="profileForm.nickname" placeholder="请输入昵称" border="surround" maxlength="20" />
-          </view>
-          <view class="form-item">
-            <view class="form-label">手机号</view>
-            <u-input v-model="profileForm.phone" type="number" placeholder="请输入手机号" border="surround" maxlength="11" />
-          </view>
-          <view class="form-item">
-            <view class="form-label">邮箱</view>
-            <u-input v-model="profileForm.email" placeholder="请输入邮箱" border="surround" maxlength="50" />
-          </view>
-          <u-button type="primary" size="large" shape="square" text="保存" :loading="savingProfile" @click="saveProfile" />
-        </view>
-      </view>
-
-      <!-- 2. 我的订单 -->
-      <view v-else-if="currentTab === 'orders'" class="orders-pane">
-        <view v-if="recentOrders.length" class="orders-list">
-          <view v-for="order in recentOrders" :key="order.id" class="order-card" @tap="goOrderDetail(order)">
-            <view class="card-header">
-              <view class="order-status" :class="statusClass(order.status)">{{ statusText(order.status) }}</view>
-              <view class="order-time">{{ dateUtil.format(order.createTime, 'YYYY-MM-DD') }}</view>
-            </view>
-            <view class="order-body">
-              <image v-if="!order.imgError" :src="resolveAdminImage(order.carCover || '')" mode="aspectFill" class="car-img" lazy-load @error="onOrderImgError(order)" />
-              <view v-else class="car-img"></view>
-              <view class="order-info">
-                <view class="car-name">{{ order.carName }}</view>
-                <view class="rent-period">{{ order.startDate }} 至 {{ order.endDate }}</view>
-                <view class="order-amount">￥{{ formatPrice(order.totalAmount) }}</view>
+            <view class="item-left">
+              <view class="item-icon">
+                <u-icon :name="item.icon" color="#ff2e2e" size="30rpx"></u-icon>
               </view>
+              <text class="item-label">{{ item.label }}</text>
+            </view>
+            <view class="item-right">
+              <view
+                v-if="item.levelGrad"
+                class="item-level-tag"
+                :style="{ background: `linear-gradient(135deg, ${item.levelGrad[0]} 0%, ${item.levelGrad[1]} 100%)` }"
+              >
+                <text class="level-tag-text">{{ userStore.user?.levelName || '普通会员' }}</text>
+              </view>
+              <text v-if="item.value" class="item-value" :class="item.valueClass">{{ item.value }}</text>
+              <view v-if="item.badge && item.badge > 0" class="item-badge">
+                {{ item.badge > 99 ? '99+' : item.badge }}
+              </view>
+              <u-icon name="arrow-right" color="#6e6e73" size="24rpx"></u-icon>
             </view>
           </view>
-          <view class="view-all-btn" @tap="goOrderList">查看全部订单 ›</view>
-        </view>
-        <view v-else class="empty-state">
-          <view class="empty-icon">📋</view>
-          <view class="empty-text">暂无订单</view>
-        </view>
-      </view>
-
-      <!-- 3. 去评价 -->
-      <view v-else-if="currentTab === 'reviews'" class="reviews-pane">
-        <view v-if="reviewableOrders.length" class="reviews-list">
-          <view v-for="order in reviewableOrders" :key="order.id" class="review-card" @tap="goOrderDetail(order)">
-            <view class="review-status">{{ reviewStatusText(order.reviewStatus) }}</view>
-            <view class="review-body">
-              <image v-if="!order.imgError" :src="resolveAdminImage(order.carCover || '')" mode="aspectFill" class="car-img" lazy-load @error="onOrderImgError(order)" />
-              <view v-else class="car-img"></view>
-              <view class="review-info">
-                <view class="car-name">{{ order.carName }}</view>
-                <view class="rent-period">{{ order.startDate }} 至 {{ order.endDate }}</view>
-                <view class="review-action">{{ order.reviewStatus === 'unreviewed' ? '去评价' : '去追评' }} ›</view>
-              </view>
-            </view>
-          </view>
-        </view>
-        <view v-else class="empty-state">
-          <view class="empty-icon">⭐</view>
-          <view class="empty-text">暂无可评价订单</view>
-        </view>
-      </view>
-
-      <!-- 4. 实名认证 -->
-      <view v-else-if="currentTab === 'verify'" class="verify-pane">
-        <view class="card verify-form">
-          <view class="form-item">
-            <view class="form-label">真实姓名 <text class="required">*</text></view>
-            <u-input v-model="verifyForm.realName" placeholder="请输入真实姓名" border="surround" maxlength="20" />
-          </view>
-          <view class="form-item">
-            <view class="form-label">身份证号 <text class="required">*</text></view>
-            <u-input v-model="verifyForm.idCard" placeholder="请输入身份证号" border="surround" maxlength="18" />
-          </view>
-          <view class="form-item">
-            <view class="form-label">出生日期</view>
-            <picker mode="date" :value="verifyForm.birthDate" :end="todayStr" @change="(e: any) => verifyForm.birthDate = e.detail.value">
-              <view class="picker-value" :class="{ placeholder: !verifyForm.birthDate }">
-                {{ verifyForm.birthDate || '请选择出生日期' }}
-              </view>
-            </picker>
-          </view>
-          <view class="form-item">
-            <view class="form-label">驾驶证号 <text class="required">*</text></view>
-            <u-input v-model="verifyForm.driverLicense" placeholder="请输入驾驶证号" border="surround" maxlength="20" />
-          </view>
-          <view class="form-item">
-            <view class="form-label">驾驶证过期日</view>
-            <picker mode="date" :value="verifyForm.driverLicenseExpire" :start="todayStr" @change="(e: any) => verifyForm.driverLicenseExpire = e.detail.value">
-              <view class="picker-value" :class="{ placeholder: !verifyForm.driverLicenseExpire }">
-                {{ verifyForm.driverLicenseExpire || '请选择过期日期' }}
-              </view>
-            </picker>
-          </view>
-
-          <!-- 4 张证件图片 -->
-          <view class="image-grid">
-            <view class="img-item">
-              <view class="img-label">身份证正面 *</view>
-              <view class="img-box" @tap="verifyForm.idCardFront ? previewVerifyImage('idCardFront') : chooseVerifyImage('idCardFront')">
-                <image v-if="verifyForm.idCardFront" :src="resolveClientImage(verifyForm.idCardFront)" mode="aspectFill" class="img-preview" />
-                <text v-else class="img-placeholder">+上传</text>
-              </view>
-              <view v-if="verifyForm.idCardFront" class="img-action" @tap="chooseVerifyImage('idCardFront')">更换</view>
-            </view>
-            <view class="img-item">
-              <view class="img-label">身份证反面 *</view>
-              <view class="img-box" @tap="verifyForm.idCardBack ? previewVerifyImage('idCardBack') : chooseVerifyImage('idCardBack')">
-                <image v-if="verifyForm.idCardBack" :src="resolveClientImage(verifyForm.idCardBack)" mode="aspectFill" class="img-preview" />
-                <text v-else class="img-placeholder">+上传</text>
-              </view>
-              <view v-if="verifyForm.idCardBack" class="img-action" @tap="chooseVerifyImage('idCardBack')">更换</view>
-            </view>
-            <view class="img-item">
-              <view class="img-label">驾驶证正面 *</view>
-              <view class="img-box" @tap="verifyForm.driverLicenseFront ? previewVerifyImage('driverLicenseFront') : chooseVerifyImage('driverLicenseFront')">
-                <image v-if="verifyForm.driverLicenseFront" :src="resolveClientImage(verifyForm.driverLicenseFront)" mode="aspectFill" class="img-preview" />
-                <text v-else class="img-placeholder">+上传</text>
-              </view>
-              <view v-if="verifyForm.driverLicenseFront" class="img-action" @tap="chooseVerifyImage('driverLicenseFront')">更换</view>
-            </view>
-            <view class="img-item">
-              <view class="img-label">驾驶证反面 *</view>
-              <view class="img-box" @tap="verifyForm.driverLicenseBack ? previewVerifyImage('driverLicenseBack') : chooseVerifyImage('driverLicenseBack')">
-                <image v-if="verifyForm.driverLicenseBack" :src="resolveClientImage(verifyForm.driverLicenseBack)" mode="aspectFill" class="img-preview" />
-                <text v-else class="img-placeholder">+上传</text>
-              </view>
-              <view v-if="verifyForm.driverLicenseBack" class="img-action" @tap="chooseVerifyImage('driverLicenseBack')">更换</view>
-            </view>
-          </view>
-
-          <u-button type="primary" shape="square" text="提交认证" :loading="savingVerify" @click="saveVerify" />
-        </view>
-      </view>
-
-      <!-- 5. 我的优惠券 -->
-      <view v-else-if="currentTab === 'coupons'" class="coupons-pane">
-        <view class="coupon-tabs">
-          <view
-            v-for="ct in couponTabs"
-            :key="ct.key"
-            class="coupon-tab"
-            :class="{ active: currentCouponTab === ct.key }"
-            @tap="switchCouponTab(ct.key)"
-          >
-            {{ ct.label }}
-          </view>
-        </view>
-        <view v-if="couponsMap[currentCouponTab].length" class="coupon-list">
-          <view v-for="c in couponsMap[currentCouponTab]" :key="c.id" class="coupon-card">
-            <view class="coupon-face">
-              <view class="coupon-value">{{ couponFaceValue(c) }}</view>
-              <view class="coupon-name">{{ (c as any).couponName || '优惠券' }}</view>
-            </view>
-            <view class="coupon-info">
-              <view v-if="c.minAmount" class="coupon-rule">满￥{{ formatPrice(c.minAmount) }}可用</view>
-              <view v-else class="coupon-rule">无门槛</view>
-              <view v-if="c.validEndTime || c.expireTime" class="coupon-valid">
-                有效期至：{{ dateUtil.format(c.validEndTime || c.expireTime, 'YYYY-MM-DD') }}
-              </view>
-              <view v-if="currentCouponTab === 'unused'" class="coupon-use-btn" @tap="goVehicleList">去使用</view>
-            </view>
-          </view>
-        </view>
-        <view v-else class="empty-state">
-          <view class="empty-icon">🎫</view>
-          <view class="empty-text">暂无优惠券</view>
         </view>
       </view>
     </view>
@@ -696,6 +232,8 @@ watch(
     <!-- 底部 TabBar 占位 -->
     <view class="tabbar-placeholder"></view>
     <TabBar active="pages/profile/index" />
+    <!-- 会员升级蒙层动画（等级突破档位时展示一次） -->
+    <LevelUpOverlay />
   </view>
 </template>
 
@@ -703,24 +241,51 @@ watch(
 .profile-page {
   box-sizing: border-box;
   min-height: 100vh;
-  background-color: #0a0a0a;
+  background-color: var(--page-bg);
   padding-bottom: calc(100rpx + env(safe-area-inset-bottom));
+}
+
+.page-title {
+  padding: 24rpx 32rpx 8rpx;
+  font-size: 40rpx;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: 2rpx;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  height: 88rpx;
+  padding: 0 24rpx;
+  background-color: var(--page-bg);
+  border-bottom: 1rpx solid var(--border-color);
+}
+
+.header-title {
+  flex: 1;
+  text-align: center;
+  font-size: 34rpx;
+  font-weight: 700;
+  color: var(--text-main);
 }
 
 /* 用户卡片 */
 .user-card {
   display: flex;
   align-items: center;
-  padding: 32rpx 24rpx;
-  background: linear-gradient(135deg, rgba(255, 46, 46, 0.08) 0%, rgba(26, 26, 26, 0.8) 100%);
-  border-bottom: 1rpx solid #2a2a2a;
+  margin: 12rpx 20rpx 4rpx;
+  padding: 24rpx 20rpx;
+  background: linear-gradient(135deg, rgba(255, 46, 46, 0.1) 0%, var(--card-bg) 100%);
+  border: 1rpx solid var(--border-color);
+  border-radius: 14rpx;
 }
 
 .avatar-wrap {
   position: relative;
-  width: 120rpx;
-  height: 120rpx;
-  margin-right: 24rpx;
+  width: 100rpx;
+  height: 100rpx;
+  margin-right: 20rpx;
   flex-shrink: 0;
 }
 
@@ -729,7 +294,7 @@ watch(
   height: 100%;
   border-radius: 50%;
   border: 2rpx solid #ff2e2e;
-  background-color: #2a2a2a;
+  background-color: var(--border-color);
 }
 
 .avatar-default {
@@ -739,20 +304,9 @@ watch(
 }
 
 .avatar-text {
-  font-size: 48rpx;
+  font-size: 40rpx;
   color: #ff2e2e;
   font-weight: 700;
-}
-
-.avatar-edit {
-  position: absolute;
-  bottom: -4rpx;
-  right: -8rpx;
-  padding: 2rpx 12rpx;
-  background-color: #ff2e2e;
-  color: #fff;
-  font-size: 18rpx;
-  border-radius: 12rpx;
 }
 
 .user-info {
@@ -761,436 +315,151 @@ watch(
 }
 
 .user-name {
-  font-size: 36rpx;
+  font-size: 32rpx;
   font-weight: 700;
-  color: #f5f5f5;
-  margin-bottom: 8rpx;
+  color: var(--text-main);
+  margin-bottom: 6rpx;
 }
 
 .user-meta {
   display: flex;
-  gap: 16rpx;
+  gap: 12rpx;
   align-items: center;
 }
 
 .verify-tag {
-  font-size: 22rpx;
-  padding: 2rpx 8rpx;
-  border-radius: 4rpx;
+  font-size: 20rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 20rpx;
+  line-height: 1.6;
 }
 
-.verify-unverified { background-color: rgba(174, 174, 178, 0.18); color: #aeaeb2; }
-.verify-pending { background-color: rgba(255, 153, 0, 0.18); color: #ff9900; }
-.verify-verified { background-color: rgba(7, 193, 96, 0.18); color: #07c160; }
-.verify-rejected { background-color: rgba(255, 46, 46, 0.18); color: #ff2e2e; }
+.v-unverified { background-color: rgba(174, 174, 178, 0.18); color: var(--text-sub); }
+.v-pending { background-color: rgba(255, 153, 0, 0.18); color: #ff9900; }
+.v-verified { background-color: rgba(7, 193, 96, 0.18); color: #07c160; }
+.v-rejected { background-color: rgba(255, 46, 46, 0.18); color: #ff2e2e; }
 
 .user-phone {
-  font-size: 24rpx;
-  color: #aeaeb2;
+  font-size: 22rpx;
+  color: var(--text-sub);
 }
 
-.logout-btn {
-  flex-shrink: 0;
-  padding: 12rpx 24rpx;
-  background-color: rgba(255, 46, 46, 0.12);
-  color: #ff2e2e;
-  font-size: 24rpx;
-  border-radius: 8rpx;
-  border: 1rpx solid #ff2e2e;
-}
-
-/* 游客态卡片 */
 .guest-card {
-  background: linear-gradient(135deg, rgba(174, 174, 178, 0.06) 0%, rgba(26, 26, 26, 0.8) 100%);
-}
-
-.guest-avatar {
-  width: 120rpx;
-  height: 120rpx;
-  margin-right: 24rpx;
-  flex-shrink: 0;
+  background: linear-gradient(135deg, rgba(174, 174, 178, 0.08) 0%, var(--card-bg) 100%);
 }
 
 .guest-tip {
-  font-size: 24rpx;
-  color: #aeaeb2;
+  font-size: 22rpx;
+  color: var(--text-sub);
 }
 
 .login-btn {
   flex-shrink: 0;
-  padding: 12rpx 24rpx;
+  padding: 10rpx 20rpx;
   background-color: rgba(255, 46, 46, 0.12);
   color: #ff2e2e;
-  font-size: 24rpx;
+  font-size: 22rpx;
   border-radius: 8rpx;
   border: 1rpx solid #ff2e2e;
 }
 
-/* 游客态提示 */
-.guest-prompt {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 100rpx 48rpx;
+/* 分组菜单（紧凑） */
+.menu-area {
+  padding: 8rpx 20rpx 0;
 }
 
-.guest-icon {
-  font-size: 80rpx;
-  margin-bottom: 24rpx;
-}
-
-.guest-title {
-  font-size: 34rpx;
-  font-weight: 700;
-  color: #f5f5f5;
-  margin-bottom: 12rpx;
-}
-
-.guest-sub {
-  font-size: 24rpx;
-  color: #aeaeb2;
-  margin-bottom: 48rpx;
-  text-align: center;
-}
-
-.guest-login-btn {
-  width: 320rpx;
-}
-
-/* Tabs */
-.tabs-bar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background-color: #0a0a0a;
-  border-bottom: 1rpx solid #2a2a2a;
-}
-
-.tabs-row {
-  display: inline-flex;
-  padding: 16rpx 24rpx;
-  gap: 16rpx;
-}
-
-.tab-item {
-  position: relative;
-  flex-shrink: 0;
-  padding: 12rpx 24rpx;
-  font-size: 26rpx;
-  color: #aeaeb2;
-  background-color: #1a1a1a;
-  border-radius: 8rpx;
-  border: 1rpx solid #2a2a2a;
-
-  &.active {
-    background-color: #ff2e2e;
-    color: #fff;
-    border-color: #ff2e2e;
-  }
-}
-
-.tab-badge {
-  display: inline-block;
-  min-width: 32rpx;
-  height: 32rpx;
-  padding: 0 8rpx;
-  margin-left: 8rpx;
-  background-color: #ff2e2e;
-  color: #fff;
-  font-size: 20rpx;
-  line-height: 32rpx;
-  text-align: center;
-  border-radius: 16rpx;
-
-  .tab-item.active & {
-    background-color: #fff;
-    color: #ff2e2e;
-  }
-}
-
-/* Tab 内容 */
-.tab-content {
-  padding: 24rpx;
-}
-
-/* 个人信息表单 */
-.form-card {
-  display: flex;
-  flex-direction: column;
-  gap: 24rpx;
-}
-
-.form-item {
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
-}
-
-.form-label {
-  font-size: 28rpx;
-  color: #f5f5f5;
-  font-weight: 500;
-}
-
-.required {
-  color: #ff2e2e;
-  margin-left: 4rpx;
-}
-
-.picker-value {
-  height: 80rpx;
-  line-height: 80rpx;
-  padding: 0 24rpx;
-  background-color: #2a2a2a;
-  border-radius: 8rpx;
-  font-size: 28rpx;
-  color: #f5f5f5;
-
-  &.placeholder {
-    color: #6e6e73;
-  }
-}
-
-/* 订单卡片 */
-.order-card,
-.review-card {
-  background-color: #1a1a1a;
-  border-radius: 16rpx;
-  padding: 24rpx;
+.menu-group {
   margin-bottom: 16rpx;
-  border: 1rpx solid #2a2a2a;
 }
 
-.card-header,
-.review-status {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: 16rpx;
-  margin-bottom: 16rpx;
-  border-bottom: 1rpx solid #2a2a2a;
-}
-
-.order-status {
-  font-size: 24rpx;
-  font-weight: 500;
-  padding: 4rpx 12rpx;
-  border-radius: 4rpx;
-}
-
-.status-pending { background-color: rgba(255, 153, 0, 0.18); color: #ff9900; }
-.status-renting { background-color: rgba(255, 46, 46, 0.18); color: #ff2e2e; }
-.status-completed { background-color: rgba(7, 193, 96, 0.18); color: #07c160; }
-.status-cancelled { background-color: rgba(174, 174, 178, 0.18); color: #aeaeb2; }
-
-.order-time,
-.review-status {
+.group-title {
   font-size: 22rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
+  padding: 4rpx 8rpx 8rpx;
 }
 
-.order-body,
-.review-body {
-  display: flex;
-  gap: 16rpx;
-}
-
-.car-img {
-  width: 160rpx;
-  height: 120rpx;
-  border-radius: 8rpx;
-  flex-shrink: 0;
-  background-color: #2a2a2a;
-}
-
-.order-info,
-.review-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.car-name {
-  font-size: 28rpx;
-  font-weight: 500;
-  color: #f5f5f5;
-  margin-bottom: 8rpx;
-}
-
-.rent-period {
-  font-size: 22rpx;
-  color: #aeaeb2;
-  margin-bottom: 8rpx;
-}
-
-.order-amount {
-  font-size: 28rpx;
-  color: #ff5a3c;
-  font-weight: 600;
-}
-
-.review-action {
-  font-size: 24rpx;
-  color: #ff2e2e;
-}
-
-.view-all-btn {
-  text-align: center;
-  padding: 24rpx;
-  font-size: 26rpx;
-  color: #ff2e2e;
-}
-
-/* 实名认证图片 */
-.image-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24rpx;
-  margin: 24rpx 0;
-}
-
-.img-item {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.img-label {
-  font-size: 24rpx;
-  color: #d1d1d6;
-}
-
-.img-box {
-  width: 100%;
-  height: 200rpx;
-  background-color: #2a2a2a;
-  border: 2rpx dashed #4a4a4a;
-  border-radius: 8rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.group-card {
+  background-color: var(--card-bg);
+  border: 1rpx solid var(--border-color);
+  border-radius: 12rpx;
   overflow: hidden;
 }
 
-.img-preview {
-  width: 100%;
-  height: 100%;
-}
-
-.img-placeholder {
-  font-size: 36rpx;
-  color: #6e6e73;
-}
-
-.img-action {
-  font-size: 22rpx;
-  color: #ff2e2e;
-  text-align: center;
-}
-
-/* 优惠券 */
-.coupon-tabs {
+.menu-item {
   display: flex;
-  gap: 8rpx;
-  margin-bottom: 24rpx;
-  overflow-x: auto;
-}
+  align-items: center;
+  justify-content: space-between;
+  padding: 18rpx 20rpx;
+  border-bottom: 1rpx solid var(--border-color);
 
-.coupon-tab {
-  flex-shrink: 0;
-  padding: 12rpx 24rpx;
-  font-size: 26rpx;
-  color: #aeaeb2;
-  background-color: #1a1a1a;
-  border-radius: 8rpx;
-  border: 1rpx solid #2a2a2a;
+  &.no-border {
+    border-bottom: none;
+  }
 
-  &.active {
-    background-color: #ff2e2e;
-    color: #fff;
-    border-color: #ff2e2e;
+  &:active {
+    background-color: rgba(128, 128, 128, 0.08);
   }
 }
 
-.coupon-list {
+.item-left {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 16rpx;
 }
 
-.coupon-card {
+.item-icon {
+  width: 44rpx;
+  height: 44rpx;
   display: flex;
-  padding: 24rpx;
-  background: linear-gradient(135deg, rgba(255, 46, 46, 0.12) 0%, rgba(26, 26, 26, 0.9) 100%);
-  border-radius: 12rpx;
-  border: 1rpx solid #ff2e2e;
-}
-
-.coupon-face {
-  flex-shrink: 0;
-  width: 180rpx;
-  text-align: center;
-  border-right: 1rpx dashed #4a4a4a;
-  padding-right: 24rpx;
-}
-
-.coupon-value {
-  font-size: 40rpx;
-  font-weight: 800;
-  color: #ff5a3c;
-  line-height: 1.2;
-}
-
-.coupon-name {
-  font-size: 20rpx;
-  color: #aeaeb2;
-  margin-top: 4rpx;
-}
-
-.coupon-info {
-  flex: 1;
-  padding-left: 24rpx;
-  display: flex;
-  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  gap: 4rpx;
+  background-color: rgba(255, 46, 46, 0.1);
+  border-radius: 8rpx;
 }
 
-.coupon-rule {
-  font-size: 24rpx;
-  color: #f5f5f5;
+.item-label {
+  font-size: 26rpx;
+  color: var(--text-main);
 }
 
-.coupon-valid {
-  font-size: 20rpx;
-  color: #6e6e73;
+.item-right {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
 }
 
-.coupon-use-btn {
-  align-self: flex-start;
-  margin-top: 8rpx;
-  padding: 6rpx 16rpx;
+.item-value {
+  font-size: 22rpx;
+
+  &.v-unverified { color: var(--text-sub); }
+  &.v-pending { color: #ff9900; }
+  &.v-verified { color: #07c160; }
+  &.v-rejected { color: #ff2e2e; }
+}
+
+/* 我的会员等级 tag：渐变背景 + 白字，右侧展示对应等级 */
+.item-level-tag {
+  padding: 6rpx 18rpx;
+  border-radius: 999rpx;
+
+  .level-tag-text {
+    font-size: 22rpx;
+    color: #ffffff;
+    font-weight: 600;
+    letter-spacing: 2rpx;
+  }
+}
+
+.item-badge {
+  min-width: 30rpx;
+  height: 30rpx;
+  padding: 0 8rpx;
   background-color: #ff2e2e;
   color: #fff;
-  font-size: 22rpx;
-  border-radius: 4rpx;
-}
-
-/* 空状态 */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 96rpx 0;
-  gap: 16rpx;
-}
-
-.empty-icon {
-  font-size: 96rpx;
-}
-
-.empty-text {
-  font-size: 28rpx;
-  color: #6e6e73;
+  font-size: 18rpx;
+  line-height: 30rpx;
+  text-align: center;
+  border-radius: 15rpx;
 }
 
 .tabbar-placeholder {

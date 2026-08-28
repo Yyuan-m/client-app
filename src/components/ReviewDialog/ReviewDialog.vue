@@ -24,7 +24,7 @@
  *  - el-rate → u-rate
  *  - 弹窗内容滚动 → scroll-view
  */
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, computed } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { getOrderDetailApi } from '@/api/modules/order'
 import { getCanReviewRoundApi, getOrderReviewsApi, submitReviewApi } from '@/api/modules/review'
@@ -54,6 +54,8 @@ const emit = defineEmits<{
 }>()
 
 const appStore = useAppStore()
+/** 加载动画颜色：随深浅主题切换 */
+const loadingColor = computed(() => (appStore.isDark ? '#aeaeb2' : '#6e6e73'))
 
 /** 弹窗内加载态 */
 const dialogLoading = ref<boolean>(false)
@@ -331,7 +333,7 @@ watch(
       <scroll-view scroll-y class="dialog-body">
         <!-- 加载中 -->
         <view v-if="dialogLoading" class="dialog-loading">
-          <u-loading-icon mode="circle" color="#ff2e2e" />
+          <u-loading-icon mode="circle" :color="loadingColor" :textColor="loadingColor" />
           <text class="loading-text">加载中…</text>
         </view>
 
@@ -426,9 +428,9 @@ watch(
                 :auto-height="true"
                 placeholder="分享您的用车体验、车况、服务感受..."
                 :custom-style="{
-                  backgroundColor: '#0a0a0a',
-                  color: '#f5f5f5',
-                  border: '1rpx solid #2a2a2a',
+                  backgroundColor: 'var(--page-bg)',
+                  color: 'var(--text-main)',
+                  border: '1rpx solid var(--border-color)',
                   borderRadius: '8rpx',
                   padding: '20rpx'
                 }"
@@ -476,8 +478,8 @@ watch(
             flex: 1,
             height: '72rpx',
             fontSize: '28rpx',
-            backgroundColor: '#2a2a2a',
-            color: '#aeaeb2',
+            backgroundColor: 'var(--border-color)',
+            color: 'var(--text-sub)',
             border: 'none'
           }"
           @click="handleClose"
@@ -503,7 +505,7 @@ watch(
 
 <style scoped lang="scss">
 .review-dialog {
-  background-color: #0a0a0a;
+  background-color: var(--card-bg);
   border-radius: 12rpx;
   max-height: 85vh;
   display: flex;
@@ -516,14 +518,14 @@ watch(
   align-items: center;
   justify-content: space-between;
   padding: 24rpx 32rpx;
-  border-bottom: 1rpx solid #1f1f1f;
+  border-bottom: 1rpx solid var(--border-color);
   flex-shrink: 0;
 }
 
 .dialog-title {
   font-size: 32rpx;
   font-weight: 600;
-  color: #f5f5f5;
+  color: var(--text-main);
 }
 
 .dialog-close {
@@ -540,7 +542,7 @@ watch(
 
   .close-icon {
     font-size: 36rpx;
-    color: #aeaeb2;
+    color: var(--text-sub);
     line-height: 1;
   }
 }
@@ -561,7 +563,7 @@ watch(
 
   .loading-text {
     font-size: 26rpx;
-    color: #aeaeb2;
+    color: var(--text-sub);
   }
 }
 
@@ -570,8 +572,8 @@ watch(
   display: flex;
   gap: 24rpx;
   align-items: center;
-  background-color: #1a1a1a;
-  border: 1rpx solid #2a2a2a;
+  background-color: var(--card-bg);
+  border: 1rpx solid var(--border-color);
   border-radius: 12rpx;
   padding: 20rpx 24rpx;
   margin-bottom: 32rpx;
@@ -581,7 +583,7 @@ watch(
     height: 96rpx;
     border-radius: 8rpx;
     flex-shrink: 0;
-    background-color: #0a0a0a;
+    background-color: var(--page-bg);
   }
 
   .order-meta {
@@ -594,7 +596,7 @@ watch(
     .order-name {
       font-size: 28rpx;
       font-weight: 500;
-      color: #f5f5f5;
+      color: var(--text-main);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -603,7 +605,7 @@ watch(
     .order-store,
     .order-no {
       font-size: 22rpx;
-      color: #6e6e73;
+      color: var(--text-dim);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -619,7 +621,7 @@ watch(
 
     .amount-label {
       font-size: 20rpx;
-      color: #6e6e73;
+      color: var(--text-dim);
     }
     .amount-value {
       font-size: 30rpx;
@@ -645,11 +647,11 @@ watch(
   .block-title {
     font-size: 28rpx;
     font-weight: 600;
-    color: #f5f5f5;
+    color: var(--text-main);
   }
   .round-hint {
     font-size: 22rpx;
-    color: #6e6e73;
+    color: var(--text-dim);
   }
 }
 
@@ -659,8 +661,8 @@ watch(
 }
 
 .review-history-card {
-  background-color: #1a1a1a;
-  border: 1rpx solid #2a2a2a;
+  background-color: var(--card-bg);
+  border: 1rpx solid var(--border-color);
   border-radius: 8rpx;
   padding: 20rpx 24rpx;
   margin-bottom: 12rpx;
@@ -713,14 +715,14 @@ watch(
 
   .review-date {
     font-size: 22rpx;
-    color: #6e6e73;
+    color: var(--text-dim);
     margin-left: auto;
   }
 }
 
 .review-history-content {
   font-size: 26rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   line-height: 1.6;
   margin-bottom: 12rpx;
 }
@@ -734,15 +736,15 @@ watch(
     width: 144rpx;
     height: 144rpx;
     border-radius: 8rpx;
-    border: 1rpx solid #2a2a2a;
-    background-color: #0a0a0a;
+    border: 1rpx solid var(--border-color);
+    background-color: var(--page-bg);
   }
 }
 
 /* ============ 评价表单 ============ */
 .review-form-card {
-  background-color: #1a1a1a;
-  border: 1rpx solid #2a2a2a;
+  background-color: var(--card-bg);
+  border: 1rpx solid var(--border-color);
   border-radius: 12rpx;
   padding: 24rpx;
 }
@@ -759,7 +761,7 @@ watch(
   display: block;
   font-size: 26rpx;
   font-weight: 500;
-  color: #f5f5f5;
+  color: var(--text-main);
   margin-bottom: 12rpx;
 }
 
@@ -770,7 +772,7 @@ watch(
 
   .rate-text {
     font-size: 24rpx;
-    color: #aeaeb2;
+    color: var(--text-sub);
   }
 }
 
@@ -782,7 +784,7 @@ watch(
 
   .upload-count {
     font-size: 22rpx;
-    color: #6e6e73;
+    color: var(--text-dim);
   }
 }
 
@@ -797,8 +799,8 @@ watch(
   aspect-ratio: 1;
   border-radius: 8rpx;
   overflow: hidden;
-  background-color: #0a0a0a;
-  border: 1rpx solid #2a2a2a;
+  background-color: var(--page-bg);
+  border: 1rpx solid var(--border-color);
 
   .upload-img {
     width: 100%;
@@ -846,7 +848,7 @@ watch(
 
 .upload-add {
   aspect-ratio: 1;
-  border: 1rpx dashed #3a3a3a;
+  border: 1rpx dashed var(--border-color);
   border-radius: 8rpx;
   display: flex;
   flex-direction: column;
@@ -867,18 +869,18 @@ watch(
 
   .add-icon {
     font-size: 40rpx;
-    color: #6e6e73;
+    color: var(--text-dim);
     line-height: 1;
   }
   .add-text {
     font-size: 20rpx;
-    color: #6e6e73;
+    color: var(--text-dim);
   }
 }
 
 .upload-hint {
   font-size: 22rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
   margin-top: 12rpx;
   display: block;
 }
@@ -889,49 +891,7 @@ watch(
   align-items: center;
   gap: 16rpx;
   padding: 20rpx 32rpx;
-  border-top: 1rpx solid #1f1f1f;
+  border-top: 1rpx solid var(--border-color);
   flex-shrink: 0;
-}
-
-/* 亮色主题 */
-:global(page.light) .review-dialog {
-  background-color: #ffffff;
-}
-:global(page.light) .dialog-header {
-  border-bottom-color: #e9e9ec;
-}
-:global(page.light) .dialog-title {
-  color: #1d1d1f;
-}
-:global(page.light) .dialog-close .close-icon {
-  color: #6e6e73;
-}
-:global(page.light) .order-info-card {
-  background-color: #f5f5f7;
-  border-color: #e9e9ec;
-}
-:global(page.light) .order-info-card .order-img {
-  background-color: #ffffff;
-}
-:global(page.light) .order-name,
-:global(page.light) .block-title {
-  color: #1d1d1f;
-}
-:global(page.light) .review-history-card {
-  background-color: #f5f5f7;
-  border-color: #e9e9ec;
-}
-:global(page.light) .review-history-content {
-  color: #1d1d1f;
-}
-:global(page.light) .review-form-card {
-  background-color: #f5f5f7;
-  border-color: #e9e9ec;
-}
-:global(page.light) .form-label {
-  color: #1d1d1f;
-}
-:global(page.light) .dialog-footer {
-  border-top-color: #e9e9ec;
 }
 </style>

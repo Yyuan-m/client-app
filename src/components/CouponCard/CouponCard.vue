@@ -464,10 +464,10 @@ function onAction(): void {
 <style scoped lang="scss">
 .coupon-card {
   position: relative;
-  border: 1rpx solid #2a2a2a;
+  border: 1rpx solid var(--border-color);
   border-radius: 12rpx;
   overflow: hidden;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   transition: transform 0.2s, border-color 0.2s;
 
   &:active {
@@ -478,7 +478,7 @@ function onAction(): void {
     opacity: 0.55;
     &:active {
       transform: none;
-      border-color: #2a2a2a;
+      border-color: var(--border-color);
     }
   }
 }
@@ -487,7 +487,7 @@ function onAction(): void {
 .coupon-value {
   display: flex;
   align-items: baseline;
-  color: #f5f5f5;
+  color: var(--text-main);
 
   .num {
     font-size: 56rpx;
@@ -503,14 +503,14 @@ function onAction(): void {
 .coupon-threshold {
   font-size: 22rpx;
   margin-top: 8rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   letter-spacing: 0.3rpx;
 }
 
 .coupon-name {
   font-size: 28rpx;
   font-weight: 500;
-  color: #f5f5f5;
+  color: var(--text-main);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -519,7 +519,7 @@ function onAction(): void {
 
 .coupon-scope {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-bottom: 6rpx;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -528,7 +528,7 @@ function onAction(): void {
 
 .coupon-time {
   font-size: 22rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
   margin-bottom: 12rpx;
 }
 
@@ -542,7 +542,7 @@ function onAction(): void {
   .stock-bar-bg {
     flex: 1;
     height: 6rpx;
-    background-color: #2a2a2a;
+    background-color: var(--border-color);
     border-radius: 3rpx;
     overflow: hidden;
   }
@@ -553,7 +553,7 @@ function onAction(): void {
   }
   .stock-text {
     font-size: 22rpx;
-    color: #6e6e73;
+    color: var(--text-dim);
     white-space: nowrap;
   }
 }
@@ -625,9 +625,9 @@ function onAction(): void {
   }
   &.tag-used,
   &.tag-expired {
-    background-color: #2a2a2a;
+    background-color: var(--border-color);
     .status-tag-text {
-      color: #6e6e73;
+      color: var(--text-dim);
     }
   }
 }
@@ -643,9 +643,9 @@ function onAction(): void {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background-color: #0a0a0a;
-    color: #f5f5f5;
-    border-bottom: 1rpx dashed #3a3a3a;
+    background-color: var(--page-bg);
+    color: var(--text-main);
+    border-bottom: 1rpx dashed var(--border-color);
     position: relative;
 
     /* 左右两侧的半圆缺口装饰（移动端为上下缺口） */
@@ -656,7 +656,7 @@ function onAction(): void {
       width: 16rpx;
       height: 16rpx;
       border-radius: 50%;
-      background-color: #0a0a0a;
+      background-color: var(--page-bg);
     }
     &::before {
       bottom: -8rpx;
@@ -699,8 +699,8 @@ function onAction(): void {
   .cmp-value-area {
     position: relative;
     padding: 32rpx 24rpx 16rpx;
-    background-color: #0a0a0a;
-    border-bottom: 1rpx dashed #3a3a3a;
+    background-color: var(--page-bg);
+    border-bottom: 1rpx dashed var(--border-color);
     text-align: left;
     flex-shrink: 0;
 
@@ -738,8 +738,8 @@ function onAction(): void {
 
   /* 详细信息：移动端常驻显示（无 hover） */
   .cmp-extra {
-    border-top: 1rpx solid #2a2a2a;
-    background-color: #1a1a1a;
+    border-top: 1rpx solid var(--border-color);
+    background-color: var(--card-bg);
   }
 
   .cmp-extra-inner {
@@ -752,48 +752,5 @@ function onAction(): void {
   .coupon-actions {
     margin-top: 8rpx;
   }
-}
-
-/* 亮色主题 */
-:global(page.light) .coupon-card {
-  background-color: #ffffff;
-  border-color: #e9e9ec;
-}
-:global(page.light) .coupon-card:not(.coupon-compact) .coupon-left {
-  background-color: #f5f5f7;
-  border-bottom-color: #d1d1d6;
-  &::before,
-  &::after {
-    background-color: #ffffff;
-  }
-}
-:global(page.light) .coupon-compact .cmp-value-area {
-  background-color: #f5f5f7;
-  border-bottom-color: #d1d1d6;
-}
-:global(page.light) .coupon-compact .cmp-extra {
-  background-color: #ffffff;
-  border-top-color: #e9e9ec;
-}
-:global(page.light) .coupon-value,
-:global(page.light) .coupon-name {
-  color: #1d1d1f;
-}
-:global(page.light) .coupon-threshold,
-:global(page.light) .coupon-scope {
-  color: #6e6e73;
-}
-:global(page.light) .coupon-time {
-  color: #8e8e93;
-}
-:global(page.light) .stock-bar-bg {
-  background-color: #e9e9ec;
-}
-:global(page.light) .stock-text {
-  color: #8e8e93;
-}
-:global(page.light) .status-tag.tag-used,
-:global(page.light) .status-tag.tag-expired {
-  background-color: #e9e9ec;
 }
 </style>

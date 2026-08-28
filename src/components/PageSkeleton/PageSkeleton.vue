@@ -118,7 +118,7 @@ function range(n: number): number[] {
   align-items: center;
   gap: 24rpx;
   padding: 24rpx 0;
-  border-bottom: 1rpx solid #1f1f1f;
+  border-bottom: 1rpx solid var(--border-color);
 
   .skeleton-circle {
     width: 96rpx;
@@ -151,10 +151,5 @@ function range(n: number): number[] {
 }
 .w-100 {
   width: 100%;
-}
-
-/* 亮色主题 */
-:global(page.light) .skeleton-row {
-  border-bottom-color: #e9e9ec;
 }
 </style>

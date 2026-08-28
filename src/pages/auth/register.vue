@@ -5,13 +5,23 @@
  * 业务：username（3-20位字母开头） + nickname（选填） + password（6-20位字母+数字） + confirmPassword
  * 自定义校验：validators.isUsername / isPassword / 一致性
  * 注册成功跳转登录页
+ * 微信小程序端：支持获取微信头像昵称，昵称自动填入表单，头像暂存待登录后上传
  */
 import { reactive, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useUserStore } from '@/stores/user'
-import { validators } from '@/utils'
+import { validators, storage } from '@/utils'
+import type { WxProfile } from '@/components/WxProfileField/WxProfileField.vue'
+import { useThemeClass } from '@/composables/useThemeClass'
+import { useNavigationBar } from '@/composables/useNavigationBar'
 
 const userStore = useUserStore()
+const { themeClass } = useThemeClass()
+/** 原生导航栏随主题切换 */
+useNavigationBar()
+
+/** 注册页暂存的微信头像 key（登录成功后由登录页读取并上传） */
+const WX_PENDING_AVATAR_KEY = 'lux_wx_pending_avatar'
 
 const form = reactive({
   username: '',
@@ -20,6 +30,9 @@ const form = reactive({
   confirmPassword: ''
 })
 const submitting = ref(false)
+
+/** 微信头像昵称（仅微信小程序端可获取） */
+const wxProfile = ref<WxProfile>({ avatar: '', nickname: '' })
 
 onLoad(() => {})
 
@@ -55,6 +68,10 @@ async function onSubmit() {
       password: payload.password,
       nickname: payload.nickname?.trim() || undefined
     })
+    // 微信小程序端：暂存微信头像，登录成功后由登录页自动上传
+    if (wxProfile.value.avatar) {
+      storage.set<string>(WX_PENDING_AVATAR_KEY, wxProfile.value.avatar)
+    }
     uni.showToast({ title: '注册成功', icon: 'success' })
     setTimeout(() => {
       uni.redirectTo({ url: '/pages/auth/login' })
@@ -66,13 +83,22 @@ async function onSubmit() {
   }
 }
 
+/** 获取微信头像昵称后：昵称自动填入表单（可继续修改） */
+function onWxProfileChange(val: WxProfile) {
+  wxProfile.value = val
+  if (val.nickname?.trim() && !form.nickname) {
+    form.nickname = val.nickname.trim()
+    uni.showToast({ title: '已填入微信昵称', icon: 'none' })
+  }
+}
+
 function goLogin() {
   uni.redirectTo({ url: '/pages/auth/login' })
 }
 </script>
 
 <template>
-  <view class="register-page">
+  <view class="register-page" :class="themeClass">
     <view class="brand-header">
       <view class="brand-title">LUXURY CAR</view>
       <view class="brand-subtitle">大圣玩车 · 豪华车租赁</view>
@@ -82,6 +108,9 @@ function goLogin() {
     <view class="form-card">
       <view class="form-title">创建账号</view>
       <view class="form-subtitle">加入大圣玩车，开启豪华出行</view>
+
+      <!-- 微信小程序端：获取微信头像昵称，昵称自动填入，头像注册登录后同步 -->
+      <WxProfileField :profile="wxProfile" @update:profile="onWxProfileChange" />
 
       <view class="form-item">
         <view class="form-label">用户名 <text class="required">*</text></view>
@@ -115,7 +144,7 @@ function goLogin() {
 <style scoped lang="scss">
 .register-page {
   min-height: 100vh;
-  background: linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%);
+  background: linear-gradient(180deg, var(--page-bg) 0%, var(--card-bg) 100%);
   padding: 96rpx 48rpx calc(48rpx + env(safe-area-inset-bottom));
 }
 
@@ -133,7 +162,7 @@ function goLogin() {
 
 .brand-subtitle {
   font-size: 24rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-top: 8rpx;
 }
 
@@ -149,22 +178,22 @@ function goLogin() {
 }
 
 .form-card {
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   border-radius: 16rpx;
   padding: 48rpx 32rpx;
-  border: 1rpx solid #2a2a2a;
+  border: 1rpx solid var(--border-color);
 }
 
 .form-title {
   font-size: 40rpx;
   font-weight: 700;
-  color: #f5f5f5;
+  color: var(--text-main);
   margin-bottom: 8rpx;
 }
 
 .form-subtitle {
   font-size: 26rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-bottom: 48rpx;
 }
 
@@ -174,7 +203,7 @@ function goLogin() {
 
 .form-label {
   font-size: 26rpx;
-  color: #d1d1d6;
+  color: var(--text-sub);
   margin-bottom: 12rpx;
 }
 
@@ -191,7 +220,7 @@ function goLogin() {
   text-align: center;
   margin-top: 32rpx;
   font-size: 26rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 .link {

@@ -340,10 +340,10 @@ function formatAnnouncementDate(t?: string): string {
   transition: background-color 0.25s, border-color 0.25s;
 
   &.scrolled {
-    background-color: rgba(10, 10, 10, 0.85);
+    background-color: var(--page-bg);
     backdrop-filter: saturate(180%) blur(20px);
     -webkit-backdrop-filter: saturate(180%) blur(20px);
-    border-bottom-color: #1f1f1f;
+    border-bottom-color: var(--border-color);
   }
 }
 
@@ -363,7 +363,7 @@ function formatAnnouncementDate(t?: string): string {
     font-weight: 600;
     letter-spacing: 1rpx;
     text-transform: uppercase;
-    color: #f5f5f5;
+    color: var(--text-main);
   }
 }
 
@@ -384,7 +384,7 @@ function formatAnnouncementDate(t?: string): string {
 
 .nav-link {
   font-size: 26rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   transition: color 0.2s;
 
   &:active {
@@ -394,7 +394,7 @@ function formatAnnouncementDate(t?: string): string {
 
 .nav-arrow {
   font-size: 20rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-left: 4rpx;
 }
 
@@ -500,7 +500,7 @@ function formatAnnouncementDate(t?: string): string {
 
 .user-name {
   font-size: 24rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   max-width: 120rpx;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -509,8 +509,8 @@ function formatAnnouncementDate(t?: string): string {
 
 /* ============ 弹出面板 ============ */
 .popup-panel {
-  background-color: #1a1a1a;
-  border: 1rpx solid #2a2a2a;
+  background-color: var(--card-bg);
+  border: 1rpx solid var(--border-color);
   border-radius: 12rpx;
   overflow: hidden;
   max-height: 600rpx;
@@ -528,7 +528,7 @@ function formatAnnouncementDate(t?: string): string {
 
 .popup-item {
   padding: 20rpx 24rpx;
-  border-bottom: 1rpx solid #2a2a2a;
+  border-bottom: 1rpx solid var(--border-color);
 
   &:last-child {
     border-bottom: none;
@@ -540,19 +540,19 @@ function formatAnnouncementDate(t?: string): string {
 
 .popup-item-text {
   font-size: 26rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
 }
 
 .popup-empty {
   padding: 32rpx 24rpx;
   text-align: center;
   font-size: 24rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
 }
 
 .anno-item {
   padding: 20rpx 24rpx;
-  border-bottom: 1rpx solid #2a2a2a;
+  border-bottom: 1rpx solid var(--border-color);
   display: flex;
   flex-direction: column;
   gap: 6rpx;
@@ -564,7 +564,7 @@ function formatAnnouncementDate(t?: string): string {
 
 .anno-title {
   font-size: 26rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -573,7 +573,7 @@ function formatAnnouncementDate(t?: string): string {
 
 .anno-date {
   font-size: 22rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
 }
 
 .all-link {
@@ -593,33 +593,5 @@ function formatAnnouncementDate(t?: string): string {
   bottom: 0;
   z-index: 998;
   background-color: rgba(0, 0, 0, 0.4);
-}
-
-/* 亮色主题 */
-:global(page.light) .app-header {
-  &.scrolled {
-    background-color: rgba(255, 255, 255, 0.85);
-    border-bottom-color: #e9e9ec;
-  }
-}
-:global(page.light) .logo-text,
-:global(page.light) .nav-link,
-:global(page.light) .user-name {
-  color: #1d1d1f;
-}
-:global(page.light) .popup-panel {
-  background-color: #ffffff;
-  border-color: #e9e9ec;
-}
-:global(page.light) .popup-item {
-  border-bottom-color: #e9e9ec;
-}
-:global(page.light) .popup-item-text,
-:global(page.light) .anno-title {
-  color: #1d1d1f;
-}
-:global(page.light) .anno-date,
-:global(page.light) .popup-empty {
-  color: #8e8e93;
 }
 </style>

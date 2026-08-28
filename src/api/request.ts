@@ -13,6 +13,10 @@
  */
 
 import { auth } from '@/utils/auth'
+// 静态 import：跳转登录时必须清空 store 内存态（避免 guest 守卫拦截弹回首页）。
+// 不能用动态 import —— 微信小程序下动态 import 会导致 useUserStore 非函数（见 stores/user.ts 注释）
+import { useUserStore } from '@/stores/user'
+import { useCartStore } from '@/stores/cart'
 
 /** 后端统一响应结构 { code, msg, data }（与 ./types 保持一致，此处不 export 避免与 types.ts 重复导出冲突） */
 interface ApiResult<T = any> {
@@ -110,49 +114,69 @@ function rejectPendingQueue(error: any): void {
   pendingQueue = []
 }
 
-/** 倒计时 3 秒跳转登录页 */
+/** 清空登录态（storage + store 内存，含购物车），供登录页/首页跳转共用 */
+function clearLoginState(): void {
+  const userStore = useUserStore()
+  userStore.token = ''
+  userStore.user = null
+  // 购物车内存态也一并清空，避免登录失效后残留上一账号的购物车数据与金额明细
+  const cartStore = useCartStore()
+  cartStore.items.splice(0, cartStore.items.length)
+  cartStore.selectedIds.splice(0, cartStore.selectedIds.length)
+  cartStore.priceDetails.splice(0, cartStore.priceDetails.length)
+  auth.clearAll()
+}
+
+/** 登录态失效提示：等用户选择「去登录」或「先看看」，不自动跳转 */
 function showCountdownRedirect(options: { title?: string; messagePrefix?: string } = {}): void {
-  // 已在跳转流程中（含 reLaunch 过渡期）直接忽略，
-  // 避免启动时并发 401/403 反复弹窗导致弹窗卡死
+  // 已在弹窗/跳转流程中直接忽略，避免并发 401/403 反复弹窗
   if (isRedirecting) return
   isRedirecting = true
 
   const title = options.title || '登录过期'
   const messagePrefix = options.messagePrefix || '登录状态已失效'
 
-  let seconds = 3
-  const updateText = () => `${messagePrefix}，${seconds} 秒后自动跳转登录页…`
-
-  let timer: ReturnType<typeof setInterval> | null = null
-  // 跳转守卫：无论倒计时结束还是用户点击，都只触发一次跳转，避免重复 reLaunch
+  // 跳转守卫：无论哪个按钮，都只触发一次跳转
   let finished = false
-  const navigateToLogin = () => {
+  const finish = (fn: () => void) => {
     if (finished) return
     finished = true
-    if (timer) clearInterval(timer)
-    doRedirectToLogin()
+    fn()
   }
+  const finishToLogin = () => finish(doRedirectToLogin)
+  const finishToHome = () => finish(goHomeAfterReauth)
 
   uni.showModal({
     title,
-    content: updateText(),
-    showCancel: false,
-    confirmText: '立即跳转',
+    content: messagePrefix,
+    showCancel: true,
+    cancelText: '先看看',
+    confirmText: '去登录',
     success: (res) => {
-      // 用户点击立即跳转 → 无条件立即跳转（不再依赖 seconds 的竞态）
-      if (res.confirm) navigateToLogin()
+      // confirm → 去登录；cancel → 先看看（跳首页浏览并解除拦截，允许后续再次提示）
+      if (res.confirm) finishToLogin()
+      else if (res.cancel) finishToHome()
     }
   })
+}
 
-  timer = setInterval(() => {
-    seconds--
-    if (seconds <= 0) navigateToLogin()
-  }, 1000)
+/** 「先看看」→ 跳首页：清空失效登录态后返回首页，并复位拦截标志 */
+function goHomeAfterReauth(): void {
+  if (!isRedirecting) return
+  clearLoginState()
+  // 首页非 tabBar 页面，必须用 reLaunch（switchTab 对非 tabBar 页会失败）
+  uni.reLaunch({ url: '/pages/home/index' })
+  setTimeout(() => {
+    isRedirecting = false
+  }, 400)
 }
 
 function doRedirectToLogin(): void {
   if (!isRedirecting) return
-  auth.clearAll()
+  // 必须同步清空 store 内存态（token/user）。
+  // 仅 auth.clearAll() 只清 uni.storage，而 pinia store 的 token.value 仍是旧值，
+  // isLoggedIn 仍为 true，会导致 reLaunch 到登录页被 guest 守卫拦截并弹回首页。
+  clearLoginState()
 
   // 当前页路径
   const pages = getCurrentPages()

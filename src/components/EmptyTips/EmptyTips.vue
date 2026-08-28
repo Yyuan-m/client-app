@@ -84,36 +84,24 @@ const actionStyle: CSSProperties = {
   width: 120rpx;
   height: 120rpx;
   border-radius: 50%;
-  border: 4rpx dashed #3a3a3a;
+  border: 4rpx dashed var(--border-color);
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
 }
 
 .empty-icon-text {
   font-size: 56rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
   font-weight: 300;
   line-height: 1;
 }
 
 .empty-text {
   font-size: 28rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   line-height: 1.6;
   padding: 0 24rpx;
-}
-
-/* 亮色主题 */
-:global(page.light) .empty-icon-box {
-  background-color: #ffffff;
-  border-color: #d1d1d6;
-}
-:global(page.light) .empty-icon-text {
-  color: #c7c7cc;
-}
-:global(page.light) .empty-text {
-  color: #6e6e73;
 }
 </style>

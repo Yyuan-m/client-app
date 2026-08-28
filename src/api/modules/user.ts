@@ -2,7 +2,7 @@
  * 用户 API 模块
  */
 import { get, post, put, upload } from '@/api/request'
-import type { MemberInfoVO, UpdateProfilePayload, ChangePasswordPayload, FavoriteVO, UploadResultVO } from '@/api/types'
+import type { MemberInfoVO, UpdateProfilePayload, ChangePasswordPayload, FavoriteVO, UploadResultVO, VerifySubmitPayload } from '@/api/types'
 
 /** 更新个人信息 */
 export function updateProfileApi(data: UpdateProfilePayload): Promise<any> {
@@ -39,6 +39,11 @@ export function uploadImageApi(filePath: string): Promise<UploadResultVO> {
   return upload<UploadResultVO>('/api/upload', filePath)
 }
 
+/** 提交实名认证（进入人工审核，成功后 verifyStatus -> pending） */
+export function submitVerifyApi(data: VerifySubmitPayload): Promise<any> {
+  return post('/api/user/verify', data)
+}
+
 export default {
   updateProfileApi,
   updateAvatarApi,
@@ -46,5 +51,6 @@ export default {
   getFavoritesApi,
   addFavoriteApi,
   removeFavoriteApi,
-  uploadImageApi
+  uploadImageApi,
+  submitVerifyApi
 }

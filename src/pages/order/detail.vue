@@ -17,6 +17,15 @@ import { getOrderDetailApi, cancelOrderApi, payOrderApi, completeOrderApi } from
 import { resolveAdminImage } from '@/utils/image'
 import { moneyUtil, dateUtil } from '@/utils'
 import type { OrderVO, OrderStatus } from '@/api/types'
+import { useThemeClass } from '@/composables/useThemeClass'
+import { useNavigationBar } from '@/composables/useNavigationBar'
+import { useUserStore } from '@/stores/user'
+
+const { themeClass, appStore } = useThemeClass()
+/** 加载动画颜色：随深浅主题切换 */
+const loadingColor = computed(() => (appStore.isDark ? '#aeaeb2' : '#6e6e73'))
+/** 原生导航栏随主题切换 */
+useNavigationBar()
 
 const PAY_TIMEOUT = 5 * 60 * 1000
 
@@ -223,6 +232,12 @@ async function confirmComplete() {
     await completeOrderApi(orderId.value)
     uni.showToast({ title: '还车成功', icon: 'success' })
     await loadDetail()
+    // 订单完成会触发后端重算会员等级，刷新用户信息以便升级动画及时感知
+    try {
+      await useUserStore().fetchUserInfo()
+    } catch (e) {
+      console.error('[order.detail] fetchUserInfo failed:', e)
+    }
   } catch (e) {
     console.error('[order.detail] complete failed:', e)
   } finally {
@@ -253,9 +268,9 @@ function goOrderList() {
 </script>
 
 <template>
-  <view class="order-detail-page">
+  <view class="order-detail-page" :class="themeClass">
     <view v-if="loading" class="loading-wrap">
-      <u-loading-icon mode="circle" text="加载中..." />
+      <u-loading-icon mode="circle" text="加载中..." :color="loadingColor" :textColor="loadingColor" />
     </view>
 
     <view v-else-if="order" class="detail-content">
@@ -272,8 +287,30 @@ function goOrderList() {
         </view>
       </view>
 
-      <!-- 车辆信息 -->
-      <view class="card car-card">
+      <!-- 车辆信息（一个订单可含多辆车，依次往下排列） -->
+      <view class="section-label" v-if="order.items && order.items.length">
+        车辆信息
+        <text class="section-count">{{ order.items.length }} 辆</text>
+      </view>
+      <view v-if="order.items && order.items.length" class="car-list">
+        <view v-for="item in order.items" :key="item.id" class="card car-card">
+          <image :src="resolveAdminImage(item.carCover || '')" mode="aspectFill" class="car-img" lazy-load />
+          <view class="car-info">
+            <view class="car-name">{{ item.carName }}</view>
+            <view class="rent-period">{{ item.startDate }} 至 {{ item.endDate }}</view>
+            <view v-if="item.days" class="rent-days">租期 {{ item.days }} 天</view>
+            <view class="rent-price">
+              日租金 ￥{{ formatPrice(item.dailyPrice) }}/天 · 小计 ￥{{ formatPrice(item.rentAmount) }}
+            </view>
+            <view v-if="Number(item.discountAmount || 0) > 0" class="rent-discount">
+              优惠 -￥{{ formatPrice(item.discountAmount) }}
+            </view>
+            <view class="rent-total">应付 ￥{{ formatPrice(item.totalAmount) }}</view>
+          </view>
+        </view>
+      </view>
+      <!-- 兼容历史一车一单：无明细时展示主订单首车 -->
+      <view v-else-if="order" class="card car-card">
         <image :src="resolveAdminImage(order.carCover || '')" mode="aspectFill" class="car-img" lazy-load />
         <view class="car-info">
           <view class="car-name">{{ order.carName }}</view>
@@ -388,13 +425,15 @@ function goOrderList() {
       @cancel="() => { showCompleteModal = false }"
       :showCancelButton="true"
     />
+    <!-- 会员升级蒙层动画（等级突破档位时展示一次） -->
+    <LevelUpOverlay />
   </view>
 </template>
 
 <style scoped lang="scss">
 .order-detail-page {
   min-height: 100vh;
-  background-color: #0a0a0a;
+  background-color: var(--page-bg);
   padding: 24rpx 24rpx calc(48rpx + env(safe-area-inset-bottom));
 }
 
@@ -413,16 +452,16 @@ function goOrderList() {
 
 .empty-text {
   font-size: 28rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 /* 状态卡片 */
 .status-card {
   padding: 32rpx 24rpx;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   border-radius: 16rpx;
   margin-bottom: 24rpx;
-  border: 1rpx solid #2a2a2a;
+  border: 1rpx solid var(--border-color);
 }
 
 .status-row {
@@ -439,7 +478,7 @@ function goOrderList() {
 .status-pending { color: #ff9900; }
 .status-renting { color: #ff2e2e; }
 .status-completed { color: #07c160; }
-.status-cancelled { color: #6e6e73; }
+.status-cancelled { color: var(--text-dim); }
 
 .countdown-tip {
   font-size: 26rpx;
@@ -452,10 +491,41 @@ function goOrderList() {
   color: #ff2e2e;
 }
 
+/* 车辆信息区块标题 */
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 16rpx;
+}
+
+.section-count {
+  font-size: 22rpx;
+  font-weight: 400;
+  color: var(--text-sub);
+  background-color: var(--border-color);
+  padding: 2rpx 12rpx;
+  border-radius: 30rpx;
+}
+
+/* 多车列表：依次往下排列 */
+.car-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+  margin-bottom: 24rpx;
+}
+
 /* 车辆卡片 */
 .car-card {
   display: flex;
   padding: 24rpx;
+  border-radius: 16rpx;
+  border: 1rpx solid var(--border-color);
+  background-color: var(--card-bg);
 }
 
 .car-img {
@@ -463,7 +533,7 @@ function goOrderList() {
   height: 150rpx;
   border-radius: 8rpx;
   flex-shrink: 0;
-  background-color: #2a2a2a;
+  background-color: var(--border-color);
 }
 
 .car-info {
@@ -475,7 +545,7 @@ function goOrderList() {
 .car-name {
   font-size: 32rpx;
   font-weight: 600;
-  color: #f5f5f5;
+  color: var(--text-main);
   margin-bottom: 12rpx;
 }
 
@@ -484,8 +554,25 @@ function goOrderList() {
 .order-store,
 .order-city {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-bottom: 4rpx;
+}
+
+.rent-price {
+  font-size: 22rpx;
+  color: var(--text-sub);
+  margin-top: 8rpx;
+}
+
+.rent-discount {
+  font-size: 22rpx;
+  color: #07c160;
+}
+
+.rent-total {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: var(--text-main);
 }
 
 /* 订单信息 */
@@ -497,7 +584,7 @@ function goOrderList() {
   display: flex;
   justify-content: space-between;
   padding: 12rpx 0;
-  border-bottom: 1rpx solid #2a2a2a;
+  border-bottom: 1rpx solid var(--border-color);
   font-size: 26rpx;
 
   &:last-child {
@@ -511,7 +598,7 @@ function goOrderList() {
   &.total {
     margin-top: 8rpx;
     padding-top: 16rpx;
-    border-top: 1rpx solid #4a4a4a;
+    border-top: 1rpx solid var(--border-color);
     border-bottom: none;
     font-weight: 600;
     font-size: 30rpx;
@@ -519,11 +606,11 @@ function goOrderList() {
 }
 
 .info-label {
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 .info-value {
-  color: #f5f5f5;
+  color: var(--text-main);
   font-weight: 500;
 }
 
@@ -552,9 +639,9 @@ function goOrderList() {
 }
 
 .btn-cancel {
-  background-color: #2a2a2a;
-  color: #f5f5f5;
-  border: 1rpx solid #4a4a4a;
+  background-color: var(--border-color);
+  color: var(--text-main);
+  border: 1rpx solid var(--border-color);
 }
 
 .btn-pay {
@@ -579,8 +666,8 @@ function goOrderList() {
 }
 
 .btn-disabled {
-  background-color: #2a2a2a;
-  color: #6e6e73;
+  background-color: var(--border-color);
+  color: var(--text-dim);
 }
 
 .action-tip {
@@ -588,6 +675,6 @@ function goOrderList() {
   text-align: center;
   padding: 48rpx 0;
   font-size: 26rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
 }
 </style>

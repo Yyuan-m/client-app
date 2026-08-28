@@ -4,12 +4,19 @@
  * 原Web: 返回按钮 + 优先级标签 + 发布时间 + 标题 + 正文（white-space: pre-wrap 保留换行）
  * 加载失败兜底："公告不存在或已下架"
  */
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getAnnouncementDetailApi } from '@/api/modules/announcement'
 import { dateUtil } from '@/utils'
+import { useThemeClass } from '@/composables/useThemeClass'
+import { useNavigationBar } from '@/composables/useNavigationBar'
 import type { AnnouncementVO, AnnouncementPriority } from '@/api/types'
 
+const { themeClass, appStore } = useThemeClass()
+/** 原生导航栏随主题切换 */
+useNavigationBar()
+/** 加载动画颜色：随深浅主题切换 */
+const loadingColor = computed(() => (appStore.isDark ? '#aeaeb2' : '#6e6e73'))
 const id = ref<number | string>('')
 const detail = ref<AnnouncementVO | null>(null)
 const loading = ref(true)
@@ -70,10 +77,10 @@ function goBack() {
 </script>
 
 <template>
-  <view class="container detail-page">
+  <view class="container detail-page" :class="themeClass">
     <!-- 加载中 -->
     <view v-if="loading" class="loading-wrap">
-      <u-loading-icon mode="circle" text="加载中..." />
+      <u-loading-icon mode="circle" text="加载中..." :color="loadingColor" :textColor="loadingColor" />
     </view>
 
     <!-- 加载失败 -->
@@ -115,12 +122,12 @@ function goBack() {
 
 .fail-text {
   font-size: 28rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 .detail-content {
   padding: 32rpx;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   border-radius: 16rpx;
 }
 
@@ -150,25 +157,25 @@ function goBack() {
 
 .priority-low {
   background-color: rgba(174, 174, 178, 0.18);
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 .publish-time {
   font-size: 24rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
 }
 
 .detail-title {
   font-size: 40rpx;
   font-weight: 700;
-  color: #f5f5f5;
+  color: var(--text-main);
   line-height: 1.4;
   margin-bottom: 32rpx;
 }
 
 .detail-body {
   font-size: 28rpx;
-  color: #d1d1d6;
+  color: var(--text-sub);
   line-height: 1.8;
   white-space: pre-wrap;
   word-break: break-word;

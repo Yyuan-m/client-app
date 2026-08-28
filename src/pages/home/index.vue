@@ -6,11 +6,12 @@
  * 自定义导航：pages.json 已配置 navigationStyle:custom
  * 沉浸式：swiper 高度 100vh，覆盖到顶部状态栏
  */
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { onLoad, onShow, onPageScroll } from '@dcloudio/uni-app'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { useCartStore } from '@/stores/cart'
+import { useThemeClass } from '@/composables/useThemeClass'
 import { useSystemConfig } from '@/composables/useSystemConfig'
 import { getActiveCarouselApi } from '@/api/modules/carousel'
 import { getHotCarsApi } from '@/api/modules/car'
@@ -26,6 +27,7 @@ const appStore = useAppStore()
 const userStore = useUserStore()
 const cartStore = useCartStore()
 const { config, loadConfig } = useSystemConfig()
+const { themeClass } = useThemeClass()
 
 // 数据
 const carouselList = ref<CarouselVO[]>([])
@@ -58,7 +60,8 @@ const appointmentForm = reactive({
   name: '',
   phone: '',
   carType: '',
-  rentDate: ''
+  rentDate: '',
+  content: ''
 })
 const submittingAppointment = ref(false)
 
@@ -93,6 +96,8 @@ onLoad(async () => {
 })
 
 onShow(async () => {
+  // 状态栏颜色随主题/滚动态恢复
+  applyStatusBarColor()
   // 刷新购物车数量（右上角购物车角标）
   if (userStore.isLoggedIn) {
     cartStore.initCart().catch((e) => console.error('[home] initCart failed:', e))
@@ -119,7 +124,7 @@ async function loadAll() {
   try {
     const promises: Promise<any>[] = [
       getActiveCarouselApi().then((r) => (carouselList.value = r || [])),
-      getHotCarsApi().then((r) => (hotCars.value = r || [])),
+      getHotCarsApi().then((r) => (hotCars.value = (r || []).filter((c) => c.status === 'available'))),
       getAdvantagesApi().then((r) => (advantages.value = r || [])),
       getReviewsApi().then((r) => (reviews.value = (r || []).map(decorateReviewRow) as any[])),
       getAvailableCouponsApi().then((r) => (coupons.value = r || [])),
@@ -289,13 +294,18 @@ async function submitAppointment() {
       name: appointmentForm.name.trim(),
       phone: appointmentForm.phone.trim(),
       carType: appointmentForm.carType.trim() || undefined,
-      rentDate: appointmentForm.rentDate || undefined
+      rentDate: appointmentForm.rentDate || undefined,
+      content: appointmentForm.content.trim() || undefined
     })
-    uni.showToast({ title: '预约提交成功', icon: 'success' })
+    uni.showToast({
+      title: userStore.isLoggedIn ? '预约成功，可在我的预约查看进度' : '预约成功，客服将尽快联系您',
+      icon: 'none'
+    })
     appointmentForm.name = ''
     appointmentForm.phone = ''
     appointmentForm.carType = ''
     appointmentForm.rentDate = ''
+    appointmentForm.content = ''
   } catch (e) {
     console.error('[home] submitAppointment failed:', e)
   } finally {
@@ -309,6 +319,19 @@ function onRentDateChange(e: any) {
 
 // 状态计算
 const showHeaderBg = computed(() => scrollTop.value > 80)
+
+/** 状态栏文字颜色：未滚动时顶部是深色 Hero 图（白字）；滚动后头部 solid，浅色主题下需切黑字 */
+function applyStatusBarColor() {
+  try {
+    uni.setNavigationBarColor({
+      frontColor: showHeaderBg.value && !appStore.isDark ? '#000000' : '#ffffff',
+      backgroundColor: appStore.isDark ? '#0A0A0A' : '#F5F5F7'
+    })
+  } catch (e) {
+    // 自定义导航页部分平台不支持
+  }
+}
+watch([() => appStore.isDark, showHeaderBg], applyStatusBarColor)
 
 // 自定义导航内容高度：小程序端与胶囊按钮垂直范围对齐（胶囊底部 - 状态栏 + 余量），其他端保持 CSS 默认
 const navContentHeight = computed(() => {
@@ -396,7 +419,7 @@ function todayPlus(days: number): string {
 </script>
 
 <template>
-  <view class="home-page">
+  <view class="home-page" :class="themeClass">
     <!-- 自定义顶部导航（沉浸式：随滚动渐变背景） -->
     <view class="custom-header" :class="{ solid: showHeaderBg }" :style="{ paddingTop: statusBarHeight + 'px' }">
       <view
@@ -648,6 +671,17 @@ function todayPlus(days: number): string {
               <view class="date-picker">{{ appointmentForm.rentDate || '请选择取车日期（选填）' }}</view>
             </picker>
           </view>
+          <view class="form-item">
+            <view class="form-label">留言内容</view>
+            <u-textarea
+              v-model="appointmentForm.content"
+              placeholder="请输入您的需求或留言（选填）"
+              border="surround"
+              maxlength="500"
+              count
+              height="120"
+            />
+          </view>
           <u-button type="primary" shape="square" text="提交预约" :loading="submittingAppointment" @click="submitAppointment" />
         </view>
       </view>
@@ -661,7 +695,7 @@ function todayPlus(days: number): string {
 <style scoped lang="scss">
 .home-page {
   min-height: 100vh;
-  background-color: #0a0a0a;
+  background-color: var(--page-bg);
   padding-bottom: calc(100rpx + env(safe-area-inset-bottom));
 }
 
@@ -678,8 +712,13 @@ function todayPlus(days: number): string {
   &.solid {
     background-color: rgba(10, 10, 10, 0.92);
     backdrop-filter: blur(20rpx);
-    border-bottom: 1rpx solid #2a2a2a;
+    border-bottom: 1rpx solid var(--border-color);
   }
+}
+
+/* 浅色主题：滚动态头部用浅色毛玻璃 */
+.theme-light .custom-header.solid {
+  background-color: rgba(245, 245, 247, 0.92);
 }
 
 .header-content {
@@ -713,9 +752,15 @@ function todayPlus(days: number): string {
   justify-content: center;
 }
 
+/* 浅色主题：图标圆形底色反转为深色淡层，图标颜色切换为主题主文字色 */
+.theme-light .header-icon,
+.theme-light .header-avatar-btn {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
 .header-icon-symbol {
   font-size: 36rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   line-height: 1;
 }
 
@@ -841,7 +886,7 @@ function todayPlus(days: number): string {
 .content-wrap {
   position: relative;
   z-index: 2;
-  background-color: #0a0a0a;
+  background-color: var(--page-bg);
 }
 
 .section {
@@ -858,12 +903,12 @@ function todayPlus(days: number): string {
 .section-title {
   font-size: 36rpx;
   font-weight: 700;
-  color: #f5f5f5;
+  color: var(--text-main);
 }
 
 .section-more {
   font-size: 24rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 /* 我的订单 */
@@ -880,10 +925,10 @@ function todayPlus(days: number): string {
 .order-card {
   display: inline-flex;
   width: 480rpx;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   border-radius: 16rpx;
   overflow: hidden;
-  border: 1rpx solid #2a2a2a;
+  border: 1rpx solid var(--border-color);
 }
 
 .order-img {
@@ -903,7 +948,7 @@ function todayPlus(days: number): string {
 
 .order-name {
   font-size: 28rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -912,7 +957,7 @@ function todayPlus(days: number): string {
 
 .order-date {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 .order-status {
@@ -924,14 +969,14 @@ function todayPlus(days: number): string {
 .status-pending { color: #ff9900; }
 .status-renting { color: #ff2e2e; }
 .status-completed { color: #07c160; }
-.status-cancelled { color: #6e6e73; }
+.status-cancelled { color: var(--text-dim); }
 
 /* 品牌简介 */
 .brand-intro {
   text-align: center;
   padding: 32rpx 24rpx;
   margin: 0 24rpx 24rpx;
-  background: linear-gradient(135deg, rgba(255, 46, 46, 0.08) 0%, rgba(26, 26, 26, 0.6) 100%);
+  background: linear-gradient(135deg, rgba(255, 46, 46, 0.08) 0%, var(--card-bg) 100%);
   border-radius: 16rpx;
 }
 
@@ -955,19 +1000,19 @@ function todayPlus(days: number): string {
 
 .stat-label {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-top: 4rpx;
 }
 
 .stat-divider {
   width: 1rpx;
   height: 64rpx;
-  background-color: #2a2a2a;
+  background-color: var(--border-color);
 }
 
 .brand-desc {
   font-size: 26rpx;
-  color: #d1d1d6;
+  color: var(--text-sub);
   margin-top: 16rpx;
   line-height: 1.6;
 }
@@ -987,10 +1032,10 @@ function todayPlus(days: number): string {
   display: inline-flex;
   flex-direction: column;
   width: 320rpx;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   border-radius: 16rpx;
   overflow: hidden;
-  border: 1rpx solid #2a2a2a;
+  border: 1rpx solid var(--border-color);
 }
 
 .car-img-wrap {
@@ -1021,7 +1066,7 @@ function todayPlus(days: number): string {
 
 .car-name {
   font-size: 28rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   font-weight: 500;
   padding: 16rpx 20rpx 4rpx;
   overflow: hidden;
@@ -1031,7 +1076,7 @@ function todayPlus(days: number): string {
 
 .car-meta {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   padding: 0 20rpx 8rpx;
 }
 
@@ -1044,7 +1089,7 @@ function todayPlus(days: number): string {
 
 .price-unit {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   font-weight: 400;
 }
 
@@ -1058,9 +1103,9 @@ function todayPlus(days: number): string {
 
 .advantage-item {
   padding: 24rpx 16rpx;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   border-radius: 16rpx;
-  border: 1rpx solid #2a2a2a;
+  border: 1rpx solid var(--border-color);
   text-align: center;
 }
 
@@ -1072,13 +1117,13 @@ function todayPlus(days: number): string {
 .adv-title {
   font-size: 28rpx;
   font-weight: 600;
-  color: #f5f5f5;
+  color: var(--text-main);
   margin-bottom: 8rpx;
 }
 
 .adv-content {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   line-height: 1.6;
 }
 
@@ -1099,9 +1144,9 @@ function todayPlus(days: number): string {
   flex-shrink: 0;
   width: 520rpx;
   padding: 24rpx;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   border-radius: 16rpx;
-  border: 1rpx solid #2a2a2a;
+  border: 1rpx solid var(--border-color);
   vertical-align: top;
 }
 
@@ -1116,7 +1161,7 @@ function todayPlus(days: number): string {
   width: 64rpx;
   height: 64rpx;
   border-radius: 50%;
-  background-color: #2a2a2a;
+  background-color: var(--border-color);
 }
 
 .review-user {
@@ -1126,13 +1171,13 @@ function todayPlus(days: number): string {
 
 .review-name {
   font-size: 28rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   font-weight: 500;
 }
 
 .review-car {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 .review-rating {
@@ -1143,7 +1188,7 @@ function todayPlus(days: number): string {
 
 .review-content {
   font-size: 26rpx;
-  color: #d1d1d6;
+  color: var(--text-sub);
   line-height: 1.6;
   /* 覆盖 .reviews-scroll 继承的 white-space: nowrap，确保评价正文在卡片内自动换行 */
   white-space: normal;
@@ -1196,7 +1241,7 @@ function todayPlus(days: number): string {
   flex: 0 0 auto;
   width: 340rpx;
   padding: 24rpx;
-  background: linear-gradient(135deg, rgba(255, 46, 46, 0.18) 0%, rgba(26, 26, 26, 0.9) 100%);
+  background: linear-gradient(135deg, rgba(255, 46, 46, 0.18) 0%, var(--card-bg) 100%);
   border-radius: 16rpx;
   border: 1rpx solid #ff2e2e;
 }
@@ -1204,7 +1249,7 @@ function todayPlus(days: number): string {
 .coupon-face {
   text-align: center;
   padding: 16rpx 0;
-  border-bottom: 1rpx dashed #2a2a2a;
+  border-bottom: 1rpx dashed var(--border-color);
 }
 
 /* 优惠面值：根据字符长度自适应字号，避免「减¥1,111.00」撑爆卡片 */
@@ -1230,7 +1275,7 @@ function todayPlus(days: number): string {
 
 .coupon-type {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-top: 4rpx;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1243,7 +1288,7 @@ function todayPlus(days: number): string {
 
 .coupon-rule {
   font-size: 22rpx;
-  color: #d1d1d6;
+  color: var(--text-sub);
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1252,7 +1297,7 @@ function todayPlus(days: number): string {
 
 .coupon-remain {
   font-size: 20rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
   text-align: center;
   margin-top: 4rpx;
 }
@@ -1281,7 +1326,7 @@ function todayPlus(days: number): string {
 
 .form-label {
   font-size: 28rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   font-weight: 500;
 }
 
@@ -1294,10 +1339,10 @@ function todayPlus(days: number): string {
   height: 80rpx;
   line-height: 80rpx;
   padding: 0 24rpx;
-  background-color: #2a2a2a;
+  background-color: var(--border-color);
   border-radius: 8rpx;
   font-size: 28rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
 }
 
 .tabbar-placeholder {

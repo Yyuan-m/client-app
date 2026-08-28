@@ -60,6 +60,16 @@ export interface MemberInfoVO {
   phone?: string
   email?: string
   avatar?: string
+  /** 会员等级 key：normal/silver/gold/diamond/black */
+  level?: string
+  /** 会员等级中文名（如「金卡会员」），展示以该字段为准 */
+  levelName?: string
+  /** 全部订单数（含进行中/已取消，仅用于展示） */
+  totalOrders?: number
+  /** 已完成订单数（会员等级计算口径） */
+  completedOrders?: number
+  /** 累计消费（仅已完成订单金额） */
+  totalSpent?: number
   realName?: string
   idCard?: string
   driverLicense?: string
@@ -74,6 +84,21 @@ export interface MemberInfoVO {
 }
 
 export interface UpdateProfilePayload extends Partial<MemberInfoVO> {}
+
+/** 提交实名认证（进入人工审核） */
+export interface VerifySubmitPayload {
+  realName: string
+  gender?: number
+  idCard: string
+  birthDate?: string
+  driverLicenseNo: string
+  driverLicenseType?: string
+  driverLicenseExpireDate?: string
+  idCardFrontImg: string
+  idCardBackImg: string
+  driverLicenseFrontImg: string
+  driverLicenseBackImg: string
+}
 
 export interface ChangePasswordPayload {
   oldPassword?: string
@@ -478,4 +503,31 @@ export interface SubmitFeedbackPayload {
   carType?: string
   rentDate?: string
   content?: string
+}
+
+/** 我的预约项（后端 AppointmentVO） */
+export interface AppointmentVO {
+  id: number
+  carType?: string
+  rentDate?: string
+  name?: string
+  phone?: string
+  content?: string
+  /** pending 待处理 / handled 已处理 / cancelled 已取消 */
+  status: string
+  statusName?: string
+  remark?: string
+  /** 处理人（后台管理员账号名） */
+  handler?: string
+  createTime?: string
+  processTime?: string
+  cancellable?: boolean
+}
+
+/** 我的预约分页结果（后端 PageResult） */
+export interface AppointmentPageVO {
+  list: AppointmentVO[]
+  total: number
+  page: number
+  pageSize: number
 }

@@ -7,10 +7,15 @@
 import { ref, reactive } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useSystemConfig } from '@/composables/useSystemConfig'
+import { useThemeClass } from '@/composables/useThemeClass'
+import { useNavigationBar } from '@/composables/useNavigationBar'
 import { submitFeedbackApi } from '@/api/modules/feedback'
 import { validators } from '@/utils'
 
 const { config, loadConfig } = useSystemConfig()
+const { themeClass } = useThemeClass()
+/** 原生导航栏随主题切换 */
+useNavigationBar()
 
 const form = reactive({
   name: '',
@@ -82,7 +87,7 @@ async function submitFeedback() {
 </script>
 
 <template>
-  <view class="container contact-page">
+  <view class="container contact-page" :class="themeClass">
     <!-- 联系方式区 -->
     <view class="section-title fade-in-up">联系方式</view>
     <view class="contact-grid">
@@ -148,7 +153,7 @@ async function submitFeedback() {
 .section-title {
   font-size: 36rpx;
   font-weight: 600;
-  color: #f5f5f5;
+  color: var(--text-main);
   margin: 32rpx 0 24rpx;
 }
 
@@ -162,9 +167,9 @@ async function submitFeedback() {
   display: flex;
   align-items: center;
   padding: 32rpx;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
+  border: 1rpx solid var(--border-color);
   border-radius: 16rpx;
-  border: 1rpx solid #2a2a2a;
 }
 
 .cc-icon {
@@ -187,20 +192,20 @@ async function submitFeedback() {
 
 .cc-label {
   font-size: 24rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-bottom: 4rpx;
 }
 
 .cc-value {
   font-size: 32rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   font-weight: 500;
   word-break: break-all;
 }
 
 .cc-sub {
   font-size: 22rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
   margin-top: 4rpx;
 }
 
@@ -218,7 +223,7 @@ async function submitFeedback() {
 
 .form-label {
   font-size: 28rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   font-weight: 500;
 }
 

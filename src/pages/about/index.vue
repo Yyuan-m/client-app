@@ -6,10 +6,15 @@
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useScrollReveal } from '@/composables/useScrollReveal'
+import { useThemeClass } from '@/composables/useThemeClass'
+import { useNavigationBar } from '@/composables/useNavigationBar'
 import { getAdvantagesApi, getStoresApi } from '@/api/modules/system'
 import type { AdvantageVO, StoreVO } from '@/api/types'
 
 const { observe } = useScrollReveal()
+const { themeClass } = useThemeClass()
+/** 原生导航栏随主题切换 */
+useNavigationBar()
 
 const advantages = ref<AdvantageVO[]>([])
 const stores = ref<StoreVO[]>([])
@@ -35,7 +40,7 @@ function callStore(phone: string) {
 </script>
 
 <template>
-  <view class="container about-page">
+  <view class="container about-page" :class="themeClass">
     <!-- 品牌介绍 -->
     <view class="brand-section fade-in-up">
       <view class="brand-title">LUXURY CAR · 大圣玩车</view>
@@ -109,13 +114,13 @@ function callStore(phone: string) {
 
 .brand-subtitle {
   font-size: 28rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-top: 8rpx;
 }
 
 .brand-desc {
   font-size: 26rpx;
-  color: #d1d1d6;
+  color: var(--text-sub);
   line-height: 1.8;
   margin-top: 32rpx;
   text-align: left;
@@ -140,14 +145,14 @@ function callStore(phone: string) {
 
 .stat-label {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-top: 4rpx;
 }
 
 .section-title {
   font-size: 36rpx;
   font-weight: 600;
-  color: #f5f5f5;
+  color: var(--text-main);
   margin: 48rpx 0 24rpx;
 }
 
@@ -159,9 +164,9 @@ function callStore(phone: string) {
 
 .advantage-card {
   padding: 32rpx 24rpx;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
+  border: 1rpx solid var(--border-color);
   border-radius: 16rpx;
-  border: 1rpx solid #2a2a2a;
   text-align: center;
 }
 
@@ -173,13 +178,13 @@ function callStore(phone: string) {
 .adv-title {
   font-size: 28rpx;
   font-weight: 600;
-  color: #f5f5f5;
+  color: var(--text-main);
   margin-bottom: 8rpx;
 }
 
 .adv-content {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   line-height: 1.6;
 }
 
@@ -191,9 +196,9 @@ function callStore(phone: string) {
 
 .store-card {
   padding: 32rpx;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
+  border: 1rpx solid var(--border-color);
   border-radius: 16rpx;
-  border: 1rpx solid #2a2a2a;
 }
 
 .store-header {
@@ -206,7 +211,7 @@ function callStore(phone: string) {
 .store-name {
   font-size: 30rpx;
   font-weight: 600;
-  color: #f5f5f5;
+  color: var(--text-main);
 }
 
 .store-phone {
@@ -216,14 +221,14 @@ function callStore(phone: string) {
 
 .store-address {
   font-size: 24rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   line-height: 1.6;
 }
 
 .empty-text {
   text-align: center;
   padding: 48rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
   font-size: 26rpx;
 }
 </style>

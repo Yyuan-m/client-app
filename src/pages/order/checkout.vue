@@ -19,7 +19,12 @@ import { createOrderApi } from '@/api/modules/order'
 import { resolveAdminImage } from '@/utils/image'
 import { moneyUtil, validators, dateUtil } from '@/utils'
 import type { MemberCouponVO, CityVO, StoreVO, PriceDetailVO } from '@/api/types'
+import { useThemeClass } from '@/composables/useThemeClass'
+import { useNavigationBar } from '@/composables/useNavigationBar'
 
+const { themeClass } = useThemeClass()
+/** 原生导航栏随主题切换 */
+useNavigationBar()
 const userStore = useUserStore()
 const cartStore = useCartStore()
 
@@ -335,6 +340,32 @@ function validate(): boolean {
   return true
 }
 
+// 实名认证拦截：未完成实名与驾驶证认证不允许提交订单
+// 返回 true 表示已认证可继续，false 表示已弹窗拦截
+async function checkVerified(): Promise<boolean> {
+  if (userStore.user?.verifyStatus === 'verified') return true
+  // 本地缓存可能过期，刷新一次用户信息确保认证状态准确
+  try {
+    await userStore.fetchUserInfo()
+  } catch (e) {
+    console.error('[checkout] fetchUserInfo failed:', e)
+  }
+  // 重新读取认证状态（fetchUserInfo 后状态可能已变化，用函数读取避免类型收窄）
+  if (userStore.user && (userStore.user as { verifyStatus?: string }).verifyStatus === 'verified') return true
+  uni.showModal({
+    title: '实名认证提示',
+    content: '需要完成实名与驾驶证信息认证后才能下单租车，是否现在去认证？',
+    confirmText: '去认证',
+    cancelText: '暂不认证',
+    success: (res) => {
+      if (res.confirm) {
+        uni.navigateTo({ url: '/pages/profile/verify' })
+      }
+    }
+  })
+  return false
+}
+
 // 提交订单
 async function submitOrder() {
   if (!cartStore.selectedCount) {
@@ -342,6 +373,8 @@ async function submitOrder() {
     return
   }
   if (!validate()) return
+  // 守卫：未完成实名认证不允许下单
+  if (!(await checkVerified())) return
   // 守卫：价格未加载完成或失败时禁止提交
   if (cartStore.priceLoading) {
     uni.showToast({ title: '价格计算中，请稍候', icon: 'none' })
@@ -370,7 +403,6 @@ async function submitOrder() {
         days: i.days
       }))
     })
-    uni.showToast({ title: '下单成功', icon: 'success' })
   } catch (e) {
     console.error('[checkout] submitOrder failed:', e)
     submitting.value = false
@@ -383,7 +415,9 @@ async function submitOrder() {
     console.error('[checkout] clearSelected failed:', e)
   }
   submitting.value = false
-  // 跳订单详情
+
+  // 一单多车：下单成功即跳转订单详情页，由用户在详情页点击支付，将订单内所有车辆一起支付
+  uni.showToast({ title: '下单成功', icon: 'success' })
   setTimeout(() => {
     uni.redirectTo({ url: `/pages/order/detail?id=${res.id}` })
   }, 600)
@@ -400,7 +434,7 @@ function goCart() {
 </script>
 
 <template>
-  <view class="checkout-page">
+  <view class="checkout-page" :class="themeClass">
     <!-- 空结算：未选车辆 -->
     <view v-if="!cartStore.selectedCount" class="empty-state">
       <view class="empty-icon">🛒</view>
@@ -410,7 +444,10 @@ function goCart() {
 
     <view v-else class="checkout-content">
       <!-- 订单概览 -->
-      <view class="section-title">订单概览</view>
+      <view class="section-title" style="display:flex; align-items:center; gap:12rpx;">
+        <text>订单概览</text>
+        <text v-if="cartStore.selectedCount > 1" class="overview-count">共 {{ cartStore.selectedCount }} 辆</text>
+      </view>
       <view v-for="item in cartStore.selectedItems" :key="item.carId" class="order-item">
         <image :src="resolveAdminImage(item.cover)" mode="aspectFill" class="item-img" />
         <view class="item-info">
@@ -580,7 +617,7 @@ function goCart() {
 <style scoped lang="scss">
 .checkout-page {
   min-height: 100vh;
-  background-color: #0a0a0a;
+  background-color: var(--page-bg);
   padding: 0 24rpx calc(48rpx + env(safe-area-inset-bottom));
 }
 
@@ -598,7 +635,7 @@ function goCart() {
 
 .empty-text {
   font-size: 28rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 .go-btn {
@@ -608,15 +645,25 @@ function goCart() {
 .section-title {
   font-size: 32rpx;
   font-weight: 600;
-  color: #f5f5f5;
+  color: var(--text-main);
   margin: 32rpx 0 16rpx;
+}
+
+/* 订单概览标题的车辆数角标 */
+.overview-count {
+  font-size: 22rpx;
+  font-weight: 400;
+  color: var(--text-sub);
+  background-color: var(--border-color);
+  padding: 2rpx 12rpx;
+  border-radius: 30rpx;
 }
 
 /* 订单概览 */
 .order-item {
   display: flex;
   padding: 24rpx 0;
-  border-bottom: 1rpx solid #2a2a2a;
+  border-bottom: 1rpx solid var(--border-color);
 }
 
 .item-img {
@@ -624,7 +671,7 @@ function goCart() {
   height: 120rpx;
   border-radius: 8rpx;
   flex-shrink: 0;
-  background-color: #2a2a2a;
+  background-color: var(--border-color);
 }
 
 .item-info {
@@ -636,14 +683,14 @@ function goCart() {
 .item-name {
   font-size: 28rpx;
   font-weight: 500;
-  color: #f5f5f5;
+  color: var(--text-main);
   margin-bottom: 8rpx;
 }
 
 .item-date,
 .item-price {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-bottom: 8rpx;
 }
 
@@ -672,7 +719,7 @@ function goCart() {
 .item-price-detail {
   margin-top: 12rpx;
   padding: 16rpx;
-  background-color: #2a2a2a;
+  background-color: var(--border-color);
   border-radius: 8rpx;
   border-left: 4rpx solid #ff2e2e;
 }
@@ -681,7 +728,7 @@ function goCart() {
   display: flex;
   justify-content: space-between;
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   padding: 4rpx 0;
 
   &.discount {
@@ -691,8 +738,8 @@ function goCart() {
   &.detail-total {
     margin-top: 8rpx;
     padding-top: 12rpx;
-    border-top: 1rpx dashed #4a4a4a;
-    color: #f5f5f5;
+    border-top: 1rpx dashed var(--border-color);
+    color: var(--text-main);
     font-weight: 600;
     font-size: 26rpx;
   }
@@ -700,7 +747,7 @@ function goCart() {
 
 .item-amount {
   font-weight: 600;
-  color: #f5f5f5;
+  color: var(--text-main);
   font-size: 28rpx;
   margin-left: 16rpx;
   flex-shrink: 0;
@@ -721,7 +768,7 @@ function goCart() {
 
 .form-label {
   font-size: 28rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   font-weight: 500;
 }
 
@@ -733,13 +780,13 @@ function goCart() {
   height: 80rpx;
   line-height: 80rpx;
   padding: 0 24rpx;
-  background-color: #2a2a2a;
+  background-color: var(--border-color);
   border-radius: 8rpx;
   font-size: 28rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
 
   &.placeholder {
-    color: #6e6e73;
+    color: var(--text-dim);
   }
 }
 
@@ -771,17 +818,17 @@ function goCart() {
 }
 
 .cc-clear {
-  color: #6e6e73;
+  color: var(--text-dim);
 }
 
 .coupon-empty {
   display: flex;
   justify-content: space-between;
   padding: 16rpx 24rpx;
-  background-color: #2a2a2a;
+  background-color: var(--border-color);
   border-radius: 8rpx;
   font-size: 26rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
 }
 
 .ce-count {
@@ -798,7 +845,7 @@ function goCart() {
   display: flex;
   justify-content: space-between;
   font-size: 26rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-bottom: 16rpx;
 
   &.discount {
@@ -808,13 +855,13 @@ function goCart() {
   &.total {
     font-size: 32rpx;
     font-weight: 700;
-    color: #f5f5f5;
+    color: var(--text-main);
   }
 }
 
 .summary-divider {
   height: 1rpx;
-  background-color: #2a2a2a;
+  background-color: var(--border-color);
   margin: 8rpx 0 16rpx;
 }
 
@@ -828,7 +875,7 @@ function goCart() {
 .price-tip {
   margin-top: 12rpx;
   font-size: 22rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
   text-align: center;
 }
 
@@ -847,14 +894,14 @@ function goCart() {
 .cd-title {
   font-size: 36rpx;
   font-weight: 700;
-  color: #f5f5f5;
+  color: var(--text-main);
   text-align: center;
   margin-bottom: 16rpx;
 }
 
 .cd-tip {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-bottom: 24rpx;
   line-height: 1.6;
 }
@@ -872,7 +919,7 @@ function goCart() {
   position: relative;
   display: flex;
   padding: 24rpx;
-  background-color: #2a2a2a;
+  background-color: var(--border-color);
   border-radius: 12rpx;
   border: 2rpx solid transparent;
 
@@ -889,7 +936,7 @@ function goCart() {
   flex-shrink: 0;
   width: 160rpx;
   text-align: center;
-  border-right: 1rpx dashed #4a4a4a;
+  border-right: 1rpx dashed var(--border-color);
   padding-right: 24rpx;
 }
 
@@ -902,7 +949,7 @@ function goCart() {
 
 .cd-face-name {
   font-size: 20rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 .cd-item-info {
@@ -915,7 +962,7 @@ function goCart() {
 
 .cd-rule {
   font-size: 24rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
 }
 
 .cd-stack-tag {
@@ -929,7 +976,7 @@ function goCart() {
 
 .cd-valid {
   font-size: 20rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
 }
 
 .cd-check {
@@ -939,7 +986,7 @@ function goCart() {
   width: 36rpx;
   height: 36rpx;
   border-radius: 50%;
-  border: 2rpx solid #4a4a4a;
+  border: 2rpx solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -959,7 +1006,7 @@ function goCart() {
 .cd-empty {
   padding: 48rpx 0;
   text-align: center;
-  color: #6e6e73;
+  color: var(--text-dim);
 }
 
 .cd-actions {
@@ -978,8 +1025,8 @@ function goCart() {
 }
 
 .cd-btn-skip {
-  background-color: #2a2a2a;
-  color: #f5f5f5;
+  background-color: var(--border-color);
+  color: var(--text-main);
 }
 
 .cd-btn-use {

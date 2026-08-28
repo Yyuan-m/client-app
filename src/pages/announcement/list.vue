@@ -3,12 +3,19 @@
  * 公告列表页
  * 原Web: 系统"只看高优先级公告"过滤 + 分页，优先级标签，noDedup:true
  */
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { onLoad, onReachBottom } from '@dcloudio/uni-app'
 import { getAnnouncementPageApi } from '@/api/modules/announcement'
 import { dateUtil } from '@/utils'
+import { useThemeClass } from '@/composables/useThemeClass'
+import { useNavigationBar } from '@/composables/useNavigationBar'
 import type { AnnouncementVO, AnnouncementPriority } from '@/api/types'
 
+const { themeClass, appStore } = useThemeClass()
+/** 原生导航栏随主题切换 */
+useNavigationBar()
+/** 加载动画颜色：随深浅主题切换 */
+const loadingColor = computed(() => (appStore.isDark ? '#aeaeb2' : '#6e6e73'))
 const list = ref<AnnouncementVO[]>([])
 const loading = ref(false)
 const finished = ref(false)
@@ -83,7 +90,7 @@ function formatTime(t?: string): string {
 </script>
 
 <template>
-  <view class="container announcement-page">
+  <view class="container announcement-page" :class="themeClass">
     <!-- 筛选条 -->
     <view class="filter-bar">
       <view class="filter-item" :class="{ active: onlyHigh }" @tap="toggleOnlyHigh">
@@ -112,7 +119,7 @@ function formatTime(t?: string): string {
 
     <!-- 加载中 -->
     <view v-if="loading" class="loading-tip">
-      <u-loading-icon mode="circle" text="加载中..." />
+      <u-loading-icon mode="circle" text="加载中..." :color="loadingColor" :textColor="loadingColor" />
     </view>
 
     <!-- 加载完成 -->
@@ -138,11 +145,11 @@ function formatTime(t?: string): string {
 
 .filter-item {
   padding: 12rpx 24rpx;
-  background-color: #1a1a1a;
-  border: 1rpx solid #2a2a2a;
+  background-color: var(--card-bg);
+  border: 1rpx solid var(--border-color);
   border-radius: 8rpx;
   font-size: 24rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 
   &.active {
     background-color: rgba(255, 46, 46, 0.12);
@@ -182,24 +189,24 @@ function formatTime(t?: string): string {
 
 .priority-low {
   background-color: rgba(174, 174, 178, 0.18);
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 .publish-time {
   font-size: 22rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
 }
 
 .card-title {
   font-size: 30rpx;
   font-weight: 600;
-  color: #f5f5f5;
+  color: var(--text-main);
   line-height: 1.4;
 }
 
 .card-content {
   font-size: 26rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   line-height: 1.6;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -221,7 +228,7 @@ function formatTime(t?: string): string {
 
 .empty-text {
   font-size: 28rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
 }
 
 .loading-tip,
@@ -232,6 +239,6 @@ function formatTime(t?: string): string {
 
 .loadmore-text {
   font-size: 24rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
 }
 </style>

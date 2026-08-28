@@ -115,9 +115,10 @@ export const useCartStore = defineStore(
       try {
         const list = await getCartListApi()
         const remoteItems = list.map(mapFromApi)
-        // 合并：以远程为主，本地独有项追加（未登录时 addCart 的项）
+        // 合并：以远程为主，仅追加从未同步过后端的纯本地项（无 id）；
+        // 曾同步过的项若已不在远程列表（其他端已删除），必须丢弃，保证与后端一致
         const remoteCarIds = new Set(remoteItems.map((i) => i.carId))
-        const localOnly = items.value.filter((i) => !remoteCarIds.has(i.carId))
+        const localOnly = items.value.filter((i) => !remoteCarIds.has(i.carId) && !i.id)
         const merged = [...remoteItems, ...localOnly]
         items.value = merged
         // 新加载项默认全选

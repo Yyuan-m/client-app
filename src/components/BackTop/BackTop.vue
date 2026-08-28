@@ -53,12 +53,12 @@ function scrollTop(): void {
   width: 88rpx;
   height: 88rpx;
   border-radius: 12rpx;
-  background-color: rgba(26, 26, 26, 0.92);
-  border: 1rpx solid #2a2a2a;
+  background-color: var(--card-bg);
+  border: 1rpx solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #aeaeb2;
+  color: var(--text-sub);
   opacity: 0;
   transform: translateY(20rpx);
   transition: opacity 0.25s ease, transform 0.25s ease, color 0.2s, border-color 0.2s;
@@ -79,12 +79,5 @@ function scrollTop(): void {
   font-size: 36rpx;
   font-weight: 600;
   line-height: 1;
-}
-
-/* 亮色主题 */
-:global(page.light) .back-top {
-  background-color: rgba(255, 255, 255, 0.92);
-  border-color: #e9e9ec;
-  color: #6e6e73;
 }
 </style>

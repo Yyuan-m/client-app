@@ -1,16 +1,19 @@
 /**
  * app store - 全局应用状态
- * Ferrari 默认暗色画布，弹窗与图片预览临时状态不持久化
+ * 主题：偏好（dark/light/auto）持久化，auto 跟随系统（uni.onThemeChange）
+ * 弹窗与图片预览临时状态不持久化
  */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Theme } from '@/types/app'
+import type { Theme, ThemePreference } from '@/types/app'
 
 export const useAppStore = defineStore(
   'app',
   () => {
-    /** 主题：dark 默认（Ferrari 风格） */
-    const theme = ref<Theme>('dark')
+    /** 主题偏好：用户设置项（持久化），auto = 跟随系统 */
+    const themePreference = ref<ThemePreference>('dark')
+    /** 系统主题（onThemeChange 同步） */
+    const systemTheme = ref<Theme>('dark')
     /** 全局登录弹窗（移动端用） */
     const loginModalVisible = ref(false)
     /** 图片预览临时状态 */
@@ -18,37 +21,82 @@ export const useAppStore = defineStore(
     const previewList = ref<string[]>([])
     const previewIndex = ref(0)
 
+    /** 实际生效主题：偏好为 auto 时取系统主题 */
+    const theme = computed<Theme>(
+      () => (themePreference.value === 'auto' ? systemTheme.value : themePreference.value)
+    )
     /** 是否暗色 */
-    const isDark = (t: Theme = theme.value) => t === 'dark'
+    const isDark = computed(() => theme.value === 'dark')
 
-    /** 应用主题到 page 节点（uni-app 中通过 uni.setNavigationBarColor 也可控制导航栏） */
-    function applyTheme(t: Theme) {
-      theme.value = t
-      // uni-app 中通过给 page 元素加 class 控制（App.vue 全局样式）
-      // 在小程序端，page 元素由 uni 框架托管，可通过 uni.setNavigationBarColor 调整导航栏
+    /** 应用当前主题：同步导航栏、页面窗口背景、下拉刷新 loading 点颜色 */
+    function applyTheme(t: Theme = theme.value) {
       try {
-        if (t === 'dark') {
-          uni.setNavigationBarColor({
-            frontColor: '#ffffff',
-            backgroundColor: '#0A0A0A'
-          })
-        } else {
-          uni.setNavigationBarColor({
-            frontColor: '#000000',
-            backgroundColor: '#ffffff'
-          })
-        }
+        // 导航栏
+        uni.setNavigationBarColor({
+          frontColor: t === 'dark' ? '#ffffff' : '#000000',
+          backgroundColor: t === 'dark' ? '#0A0A0A' : '#F5F5F7'
+        })
       } catch (e) {
         // H5 端可能不支持
       }
+      // 页面窗口背景：刷新/下拉加载时 loading 背景会露出，需随主题切换（默认硬编码黑）
+      try {
+        uni.setBackgroundColor?.({
+          backgroundColor: t === 'dark' ? '#0A0A0A' : '#f5f5f7',
+          backgroundColorTop: t === 'dark' ? '#0A0A0A' : '#f5f5f7',
+          backgroundColorBottom: t === 'dark' ? '#0A0A0A' : '#f5f5f7'
+        })
+      } catch (e) {
+        // 部分平台不支持
+      }
+      try {
+        // 下拉刷新的 loading 点颜色随主题
+        uni.setBackgroundTextStyle?.({ textStyle: t === 'dark' ? 'light' : 'dark' })
+      } catch (e) {
+        // 部分平台不支持
+      }
     }
 
+    /** 设置主题偏好并立即应用 */
+    function setPreference(p: ThemePreference) {
+      themePreference.value = p
+      applyTheme()
+    }
+
+    /** 兼容旧调用：直接设置生效主题（覆盖偏好） */
     function setTheme(t: Theme) {
-      applyTheme(t)
+      setPreference(t)
     }
 
+    /** 兼容旧调用：暗浅切换 */
     function toggleTheme() {
-      applyTheme(theme.value === 'dark' ? 'light' : 'dark')
+      setPreference(theme.value === 'dark' ? 'light' : 'dark')
+    }
+
+    /**
+     * 初始化主题：读取系统主题并注册系统主题变化监听（auto 偏好时生效）
+     * 需在小程序 manifest 开启 darkmode 才能收到 onThemeChange
+     */
+    function initTheme() {
+      try {
+        const info = uni.getAppBaseInfo?.()
+        if (info?.theme === 'light' || info?.theme === 'dark') {
+          systemTheme.value = info.theme
+        }
+      } catch {
+        // 低版本基础库无 getAppBaseInfo
+      }
+      // #ifdef MP-WEIXIN
+      if (typeof uni.onThemeChange === 'function') {
+        uni.onThemeChange((res: any) => {
+          if (res?.theme === 'light' || res?.theme === 'dark') {
+            systemTheme.value = res.theme
+            applyTheme()
+          }
+        })
+      }
+      // #endif
+      applyTheme()
     }
 
     /** 全局登录弹窗 */
@@ -78,15 +126,19 @@ export const useAppStore = defineStore(
     }
 
     return {
-      theme,
+      themePreference,
+      systemTheme,
       loginModalVisible,
       imagePreviewVisible,
       previewList,
       previewIndex,
+      theme,
       isDark,
       applyTheme,
+      setPreference,
       setTheme,
       toggleTheme,
+      initTheme,
       openLoginModal,
       closeLoginModal,
       openImagePreview,
@@ -94,14 +146,14 @@ export const useAppStore = defineStore(
     }
   },
   {
-    // 只持久化 theme，弹窗/预览状态不持久化，避免刷新后 imagePreviewVisible 残留导致全屏预览
+    // 只持久化主题偏好，弹窗/预览状态不持久化，避免刷新后 imagePreviewVisible 残留导致全屏预览
     persist: {
       key: 'lux_customer_app',
       storage: {
         getItem: (key: string) => uni.getStorageSync(key),
         setItem: (key: string, value: string) => uni.setStorageSync(key, value)
       },
-      paths: ['theme']
+      paths: ['themePreference']
     } as any
   }
 )

@@ -32,6 +32,7 @@
   "quickapp": {},
   "mp-weixin": {
     "appid": "wx1cbf5acaa5a3d3ea",
+    "darkmode": true,
     "setting": {
       "urlCheck": true,
       "es6": true,

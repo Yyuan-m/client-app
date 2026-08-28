@@ -232,8 +232,8 @@ function goRent(): void {
 <style scoped lang="scss">
 .car-card {
   position: relative;
-  background-color: #1a1a1a;
-  border: 1rpx solid #2a2a2a;
+  background-color: var(--card-bg);
+  border: 1rpx solid var(--border-color);
   border-radius: 12rpx;
   overflow: hidden;
   transition: transform 0.2s, border-color 0.2s;
@@ -247,7 +247,7 @@ function goRent(): void {
     opacity: 0.65;
     &:active {
       transform: none;
-      border-color: #2a2a2a;
+      border-color: var(--border-color);
     }
   }
 }
@@ -258,7 +258,7 @@ function goRent(): void {
   width: 100%;
   height: 320rpx;
   overflow: hidden;
-  background-color: #0a0a0a;
+  background-color: var(--page-bg);
 
   .card-img {
     width: 100%;
@@ -338,7 +338,7 @@ function goRent(): void {
 .card-name {
   font-size: 32rpx;
   font-weight: 500;
-  color: #f5f5f5;
+  color: var(--text-main);
   margin-bottom: 12rpx;
   display: block;
   overflow: hidden;
@@ -355,12 +355,12 @@ function goRent(): void {
 
 .tag-item {
   padding: 4rpx 14rpx;
-  border: 1rpx solid #3a3a3a;
+  border: 1rpx solid var(--border-color);
   border-radius: 20rpx;
 
   .tag-text {
     font-size: 20rpx;
-    color: #aeaeb2;
+    color: var(--text-sub);
     line-height: 1.4;
   }
 }
@@ -377,11 +377,11 @@ function goRent(): void {
   }
   .meta-icon {
     font-size: 22rpx;
-    color: #6e6e73;
+    color: var(--text-dim);
   }
   .meta-text {
     font-size: 22rpx;
-    color: #aeaeb2;
+    color: var(--text-sub);
   }
 }
 
@@ -411,12 +411,12 @@ function goRent(): void {
   display: flex;
   align-items: baseline;
   gap: 2rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   flex-wrap: wrap;
 
   .unit {
     font-size: 22rpx;
-    color: #aeaeb2;
+    color: var(--text-sub);
   }
   .amount {
     font-size: 40rpx;
@@ -429,16 +429,16 @@ function goRent(): void {
     display: flex;
     align-items: baseline;
     gap: 2rpx;
-    color: #6e6e73;
+    color: var(--text-dim);
     width: 100%;
 
     .unit {
-      color: #6e6e73;
+      color: var(--text-dim);
     }
     .amount-original {
       font-size: 26rpx;
       text-decoration: line-through;
-      text-decoration-color: #6e6e73;
+      text-decoration-color: var(--text-dim);
     }
   }
 
@@ -474,33 +474,5 @@ function goRent(): void {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-}
-
-/* 亮色主题 */
-:global(page.light) .car-card {
-  background-color: #ffffff;
-  border-color: #e9e9ec;
-}
-:global(page.light) .card-image {
-  background-color: #f5f5f7;
-}
-:global(page.light) .card-name {
-  color: #1d1d1f;
-}
-:global(page.light) .tag-item {
-  border-color: #d1d1d6;
-  .tag-text {
-    color: #6e6e73;
-  }
-}
-:global(page.light) .meta-icon,
-:global(page.light) .card-price .unit {
-  color: #8e8e93;
-}
-:global(page.light) .meta-text {
-  color: #6e6e73;
-}
-:global(page.light) .card-status {
-  background-color: rgba(255, 255, 255, 0.85);
 }
 </style>

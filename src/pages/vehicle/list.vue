@@ -11,6 +11,8 @@ import { ref, reactive, computed } from 'vue'
 import { onLoad, onShow, onReachBottom } from '@dcloudio/uni-app'
 import { useFilterStore } from '@/stores/filter'
 import { useUserStore } from '@/stores/user'
+import { useThemeClass } from '@/composables/useThemeClass'
+import { useNavigationBar } from '@/composables/useNavigationBar'
 import { getCarListApi } from '@/api/modules/car'
 import { getDictByTypeApi } from '@/api/modules/system'
 import { resolveAdminImage, resolveClientImage, placeholderImage } from '@/utils/image'
@@ -19,6 +21,13 @@ import type { CarVO, DictDataVO, PageResult } from '@/api/types'
 
 const filterStore = useFilterStore()
 const userStore = useUserStore()
+const { themeClass, appStore } = useThemeClass()
+/** 原生导航栏随模块切换 */
+useNavigationBar()
+
+/** uview 弹窗/搜索框配色：跟随深浅色主题 */
+const darkerBg = computed(() => (appStore.isDark ? '#1a1a1a' : '#ffffff'))
+const cancelColor = computed(() => (appStore.isDark ? '#aeaeb2' : '#6e6e73'))
 
 const list = ref<CarVO[]>([])
 const vehicleTypes = ref<DictDataVO[]>([])
@@ -185,7 +194,7 @@ function currentTypeLabel(): string {
 </script>
 
 <template>
-  <view class="vehicle-list-page">
+  <view class="vehicle-list-page" :class="themeClass">
     <!-- 筛选栏 -->
     <view class="filter-bar">
       <view class="search-wrap">
@@ -193,7 +202,7 @@ function currentTypeLabel(): string {
           v-model="filterStore.filters.keyword"
           placeholder="搜索品牌/车型"
           :showAction="false"
-          bgColor="#1a1a1a"
+          :bgColor="darkerBg"
           @search="onKeywordSearch"
           @clear="onKeywordClear"
         />
@@ -288,8 +297,8 @@ function currentTypeLabel(): string {
     <u-picker
       :show="showTypePicker"
       :columns="typeColumns"
-      bgColor="#1a1a1a"
-      cancelColor="#aeaeb2"
+      :bgColor="darkerBg"
+      :cancelColor="cancelColor"
       confirmColor="#ff2e2e"
       @confirm="onTypeConfirm"
       @cancel="onTypeCancel"
@@ -305,7 +314,7 @@ function currentTypeLabel(): string {
 <style scoped lang="scss">
 .vehicle-list-page {
   min-height: 100vh;
-  background-color: #0a0a0a;
+  background-color: var(--page-bg);
   padding-bottom: calc(100rpx + env(safe-area-inset-bottom));
 }
 
@@ -313,9 +322,9 @@ function currentTypeLabel(): string {
   position: sticky;
   top: 0;
   z-index: 10;
-  background-color: #0a0a0a;
+  background-color: var(--page-bg);
   padding: 16rpx 24rpx 12rpx;
-  border-bottom: 1rpx solid #2a2a2a;
+  border-bottom: 1rpx solid var(--border-color);
 }
 
 .search-wrap {
@@ -334,33 +343,33 @@ function currentTypeLabel(): string {
   align-items: center;
   gap: 8rpx;
   padding: 8rpx 16rpx;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   border-radius: 8rpx;
-  border: 1rpx solid #2a2a2a;
+  border: 1rpx solid var(--border-color);
 }
 
 .filter-label {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 .filter-value {
   font-size: 24rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
 }
 
 .sort-group {
   display: flex;
   gap: 4rpx;
   padding: 0;
-  background-color: #1a1a1a;
-  border: 1rpx solid #2a2a2a;
+  background-color: var(--card-bg);
+  border: 1rpx solid var(--border-color);
 }
 
 .sort-btn {
   padding: 8rpx 16rpx;
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 
   &.active {
     background-color: #ff2e2e;
@@ -377,7 +386,7 @@ function currentTypeLabel(): string {
 }
 
 .skeleton-card {
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   border-radius: 16rpx;
   overflow: hidden;
 }
@@ -408,7 +417,7 @@ function currentTypeLabel(): string {
 
 .empty-text {
   font-size: 28rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
 }
 
 .reset-btn {
@@ -424,10 +433,10 @@ function currentTypeLabel(): string {
 }
 
 .car-card {
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   border-radius: 16rpx;
   overflow: hidden;
-  border: 1rpx solid #2a2a2a;
+  border: 1rpx solid var(--border-color);
   transition: transform 0.2s;
 
   &:active {
@@ -502,13 +511,13 @@ function currentTypeLabel(): string {
 .car-name {
   font-size: 32rpx;
   font-weight: 600;
-  color: #f5f5f5;
+  color: var(--text-main);
   margin-bottom: 8rpx;
 }
 
 .car-meta {
   font-size: 24rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-bottom: 12rpx;
 }
 
@@ -516,7 +525,7 @@ function currentTypeLabel(): string {
   display: flex;
   justify-content: space-between;
   font-size: 22rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
   margin-bottom: 16rpx;
 }
 
@@ -569,7 +578,7 @@ function currentTypeLabel(): string {
 
 .price-unit {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   font-weight: 400;
 }
 
@@ -582,8 +591,8 @@ function currentTypeLabel(): string {
   font-weight: 500;
 
   &.disabled {
-    background-color: #2a2a2a;
-    color: #6e6e73;
+    background-color: var(--border-color);
+    color: var(--text-dim);
   }
 }
 
@@ -594,7 +603,7 @@ function currentTypeLabel(): string {
 
 .loadmore-text {
   font-size: 24rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
 }
 
 .tabbar-placeholder {

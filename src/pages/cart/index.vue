@@ -17,9 +17,16 @@ import { moneyUtil } from '@/utils'
 import type { CartItem } from '@/stores/cart'
 import type { PriceDetailVO } from '@/api/types'
 import { getCustomNavTopOffset } from '@/utils/navbar'
+import { useThemeClass } from '@/composables/useThemeClass'
+import { useNavigationBar } from '@/composables/useNavigationBar'
 
+const { themeClass, appStore } = useThemeClass()
+/** 自定义导航页同步状态栏文字/胶囊颜色随主题 */
+useNavigationBar()
 const userStore = useUserStore()
 const cartStore = useCartStore()
+/** 加载动画颜色：随深浅主题切换 */
+const loadingColor = computed(() => (appStore.isDark ? '#aeaeb2' : '#6e6e73'))
 
 const loading = ref(false)
 const showRemoveModal = ref(false)
@@ -129,15 +136,17 @@ function formatPrice(p: number | null | undefined): string {
 </script>
 
 <template>
-  <view class="cart-page" :style="{ paddingTop: navTop + 'px' }">
-    <view class="page-title-row">
-      <view class="page-title">租车购物车</view>
-      <view v-if="cartStore.items.length" class="clear-btn" @tap="showClearConfirm">清空</view>
+  <view class="cart-page" :class="themeClass" :style="{ paddingTop: navTop + 'px' }">
+    <view class="page-header">
+      <text class="header-title">租车购物车</text>
+      <view class="header-side">
+        <view v-if="cartStore.items.length" class="clear-btn" @tap="showClearConfirm">清空</view>
+      </view>
     </view>
 
     <!-- 加载中 -->
     <view v-if="loading && !cartStore.items.length" class="loading-wrap">
-      <u-loading-icon mode="circle" text="加载中..." />
+      <u-loading-icon mode="circle" text="加载中..." :color="loadingColor" :textColor="loadingColor" />
     </view>
 
     <!-- 空购物车 -->
@@ -246,21 +255,31 @@ function formatPrice(p: number | null | undefined): string {
 .cart-page {
   box-sizing: border-box;
   min-height: 100vh;
-  background-color: #0a0a0a;
+  background-color: var(--page-bg);
   padding-bottom: calc(220rpx + env(safe-area-inset-bottom));
 }
 
-.page-title-row {
+.page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24rpx 24rpx 16rpx;
+  height: 88rpx;
+  padding: 0 24rpx;
+  background-color: var(--page-bg);
+  border-bottom: 1rpx solid var(--border-color);
 }
 
-.page-title {
-  font-size: 36rpx;
+.header-title {
+  flex: 1;
+  text-align: left;
+  font-size: 34rpx;
   font-weight: 700;
-  color: #f5f5f5;
+  color: var(--text-main);
+}
+
+.header-side {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .clear-btn {
@@ -283,12 +302,12 @@ function formatPrice(p: number | null | undefined): string {
 
 .empty-text {
   font-size: 32rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 .empty-sub {
   font-size: 24rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
   margin-bottom: 24rpx;
 }
 
@@ -305,17 +324,17 @@ function formatPrice(p: number | null | undefined): string {
   display: flex;
   align-items: flex-start;
   padding: 24rpx;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   border-radius: 16rpx;
   margin-bottom: 16rpx;
-  border: 1rpx solid #2a2a2a;
+  border: 1rpx solid var(--border-color);
 }
 
 .check-box {
   flex-shrink: 0;
   width: 40rpx;
   height: 40rpx;
-  border: 2rpx solid #6e6e73;
+  border: 2rpx solid var(--text-dim);
   border-radius: 50%;
   margin-right: 16rpx;
   margin-top: 8rpx;
@@ -342,7 +361,7 @@ function formatPrice(p: number | null | undefined): string {
   border-radius: 8rpx;
   overflow: hidden;
   margin-right: 16rpx;
-  background-color: #2a2a2a;
+  background-color: var(--border-color);
 }
 
 .item-img {
@@ -357,7 +376,7 @@ function formatPrice(p: number | null | undefined): string {
 
 .item-name {
   font-size: 28rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   font-weight: 500;
   margin-bottom: 8rpx;
   overflow: hidden;
@@ -367,13 +386,13 @@ function formatPrice(p: number | null | undefined): string {
 
 .item-date {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-bottom: 4rpx;
 }
 
 .item-rent-days {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   margin-bottom: 8rpx;
 }
 
@@ -386,7 +405,7 @@ function formatPrice(p: number | null | undefined): string {
 
 .price-unit {
   font-size: 22rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
   font-weight: 400;
 }
 
@@ -412,7 +431,7 @@ function formatPrice(p: number | null | undefined): string {
 
 .subtotal-price {
   font-size: 26rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   font-weight: 500;
 }
 
@@ -424,7 +443,7 @@ function formatPrice(p: number | null | undefined): string {
   align-items: center;
   justify-content: center;
   font-size: 36rpx;
-  color: #6e6e73;
+  color: var(--text-dim);
   margin-left: 8rpx;
 }
 
@@ -434,9 +453,9 @@ function formatPrice(p: number | null | undefined): string {
   justify-content: space-around;
   padding: 24rpx;
   margin: 16rpx 24rpx;
-  background-color: #1a1a1a;
+  background-color: var(--card-bg);
   border-radius: 16rpx;
-  border: 1rpx solid #2a2a2a;
+  border: 1rpx solid var(--border-color);
 }
 
 .service-item {
@@ -451,8 +470,8 @@ function formatPrice(p: number | null | undefined): string {
   right: 0;
   bottom: calc(100rpx + env(safe-area-inset-bottom));
   height: 110rpx;
-  background-color: #1a1a1a;
-  border-top: 1rpx solid #2a2a2a;
+  background-color: var(--card-bg);
+  border-top: 1rpx solid var(--border-color);
   display: flex;
   align-items: center;
   padding: 0 24rpx;
@@ -467,7 +486,7 @@ function formatPrice(p: number | null | undefined): string {
 
 .all-text {
   font-size: 26rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   margin-left: 8rpx;
 }
 
@@ -479,7 +498,7 @@ function formatPrice(p: number | null | undefined): string {
 
 .total-label {
   font-size: 26rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
 }
 
 .total-price {
@@ -496,8 +515,8 @@ function formatPrice(p: number | null | undefined): string {
   border-radius: 8rpx;
 
   &.disabled {
-    background-color: #2a2a2a;
-    color: #6e6e73;
+    background-color: var(--border-color);
+    color: var(--text-dim);
   }
 }
 

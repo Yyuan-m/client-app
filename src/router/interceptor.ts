@@ -9,7 +9,7 @@
  *  2. 通过路径判断 meta（requiresAuth / guest / title）
  *  3. requiresAuth 且未登录 → 重定向到 /pages/auth/login?redirect=...
  *  4. guest 且已登录 → 重定向到首页
- *  5. 设置导航栏标题
+ *  （导航栏标题交给各页面自身，见下方「说明」，拦截器不再改动标题）
  */
 import { useUserStore } from '@/stores/user'
 
@@ -36,7 +36,12 @@ const ROUTE_TABLE: Record<string, RouteMeta> = {
   '/pages/order/checkout': { title: '确认下单', requiresAuth: true },
   '/pages/order/list': { title: '我的订单', requiresAuth: true },
   '/pages/order/detail': { title: '订单详情', requiresAuth: true },
-  '/pages/profile/index': { title: '个人中心' }
+  '/pages/profile/index': { title: '个人中心' },
+  '/pages/profile/info': { title: '个人信息', requiresAuth: true },
+  '/pages/profile/verify': { title: '实名认证', requiresAuth: true },
+  '/pages/profile/reviews': { title: '我的评价', requiresAuth: true },
+  '/pages/profile/coupons': { title: '我的优惠券', requiresAuth: true },
+  '/pages/profile/settings': { title: '设置', requiresAuth: true }
 }
 
 /** 从 url 字符串解析 path（不含 query） */
@@ -56,15 +61,12 @@ function getMetaByPath(path: string): RouteMeta {
   return {}
 }
 
-/** 设置导航栏标题 */
-function setPageTitle(meta: RouteMeta) {
-  const title = meta.title ? `${meta.title} · LUXURY CAR` : 'LUXURY CAR · 大圣玩车'
-  try {
-    uni.setNavigationBarTitle({ title: title.length > 12 ? meta.title || '大圣玩车' : title })
-  } catch (e) {
-    // ignore
-  }
-}
+/**
+ * 说明：不再由拦截器在跳转前调用 setNavigationBarTitle。
+ * 跳转前调用 uni.setNavigationBarTitle 作用的是「当前页」，会把目标页标题写到源页，
+ * 导致返回后标题卡住（如登录↔忘记密码）。标题交给各页面自身（pages.json 声明 +
+ * 页面 onShow/onLoad 自定义），原生导航栏返回时会自动还原。
+ */
 
 /** 拦截检查：返回 true 允许通过，false 拒绝 */
 function beforeNavigate(url: string): boolean {
@@ -103,8 +105,6 @@ function wrapNavigateTo() {
       options.fail?.({ errMsg: 'navigateTo:fail blocked by guard' } as any)
       return
     }
-    const meta = getMetaByPath(parsePath(options.url as string))
-    setPageTitle(meta)
     originNavigateTo(options)
   }
 }
@@ -116,8 +116,6 @@ function wrapRedirectTo() {
       options.fail?.({ errMsg: 'redirectTo:fail blocked by guard' } as any)
       return
     }
-    const meta = getMetaByPath(parsePath(options.url as string))
-    setPageTitle(meta)
     originRedirectTo(options)
   }
 }
@@ -129,8 +127,6 @@ function wrapReLaunch() {
       options.fail?.({ errMsg: 'reLaunch:fail blocked by guard' } as any)
       return
     }
-    const meta = getMetaByPath(parsePath(options.url as string))
-    setPageTitle(meta)
     originReLaunch(options)
   }
 }
@@ -142,8 +138,6 @@ function wrapSwitchTab() {
       options.fail?.({ errMsg: 'switchTab:fail blocked by guard' } as any)
       return
     }
-    const meta = getMetaByPath(parsePath(options.url as string))
-    setPageTitle(meta)
     originSwitchTab(options)
   }
 }
@@ -154,10 +148,6 @@ export function setupRouteInterceptor() {
   wrapRedirectTo()
   wrapReLaunch()
   wrapSwitchTab()
-
-  // 页面加载时也设置标题
-  const originOnLoad = (globalThis as any).onLoad
-  // 注意：uni-app 的页面 onLoad 由各页面自行处理，这里不接管
 }
 
 /** 路由跳转工具（统一调用入口，便于业务使用） */

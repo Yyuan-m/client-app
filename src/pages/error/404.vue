@@ -5,6 +5,12 @@
  * uni-app: u-icon + 自定义 view 实现
  */
 import { onLoad } from '@dcloudio/uni-app'
+import { useThemeClass } from '@/composables/useThemeClass'
+import { useNavigationBar } from '@/composables/useNavigationBar'
+
+const { themeClass } = useThemeClass()
+/** 原生导航栏随主题切换 */
+useNavigationBar()
 
 onLoad(() => {
   // 设置导航栏标题
@@ -27,7 +33,7 @@ function goBack() {
 </script>
 
 <template>
-  <view class="not-found">
+  <view class="not-found" :class="themeClass">
     <view class="nf-icon-wrap">
       <text class="nf-icon">!</text>
     </view>
@@ -49,7 +55,7 @@ function goBack() {
   align-items: center;
   justify-content: center;
   padding: 48rpx 48rpx calc(48rpx + env(safe-area-inset-bottom));
-  background-color: #0a0a0a;
+  background-color: var(--page-bg);
 }
 
 .nf-icon-wrap {
@@ -73,7 +79,7 @@ function goBack() {
 .nf-code {
   font-size: 96rpx;
   font-weight: 800;
-  color: #f5f5f5;
+  color: var(--text-main);
   letter-spacing: 4rpx;
   line-height: 1.2;
 }
@@ -81,14 +87,14 @@ function goBack() {
 .nf-text {
   margin-top: 16rpx;
   font-size: 32rpx;
-  color: #f5f5f5;
+  color: var(--text-main);
   font-weight: 500;
 }
 
 .nf-sub {
   margin-top: 12rpx;
   font-size: 26rpx;
-  color: #aeaeb2;
+  color: var(--text-sub);
 }
 
 .nf-actions {
@@ -102,9 +108,9 @@ function goBack() {
 
 .nf-btn-back {
   :deep(.u-button) {
-    background-color: #1a1a1a !important;
-    color: #f5f5f5 !important;
-    border: 1rpx solid #2a2a2a !important;
+    background-color: var(--card-bg) !important;
+    color: var(--text-main) !important;
+    border: 1rpx solid var(--border-color) !important;
   }
 }
 </style>
