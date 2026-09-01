@@ -32,9 +32,19 @@ export function getUsableCouponsApi(params: UsableCouponQuery): Promise<MemberCo
   return get<MemberCouponVO[]>('/api/coupon/usable', params)
 }
 
+/** 领取来源：小程序→miniprogram / H5→h5 / 后台发放→manual */
+function couponSource(): string {
+  // #ifdef H5
+  return 'h5'
+  // #endif
+  // #ifndef H5
+  return 'miniprogram'
+  // #endif
+}
+
 /** 领取，返回 member_coupon.id */
 export function receiveCouponApi(couponId: number | string): Promise<{ id: number }> {
-  return post<{ id: number }>(`/api/coupon/receive/${couponId}`, { source: 'manual' })
+  return post<{ id: number }>(`/api/coupon/receive/${couponId}`, { source: couponSource() })
 }
 
 /** 锁定（unused → locked） */

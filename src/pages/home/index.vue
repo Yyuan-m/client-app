@@ -127,7 +127,7 @@ async function loadAll() {
       getHotCarsApi().then((r) => (hotCars.value = (r || []).filter((c) => c.status === 'available'))),
       getAdvantagesApi().then((r) => (advantages.value = r || [])),
       getReviewsApi().then((r) => (reviews.value = (r || []).map(decorateReviewRow) as any[])),
-      getAvailableCouponsApi().then((r) => (coupons.value = r || [])),
+      getAvailableCouponsApi().then((r) => (coupons.value = filterAvailableCoupons(r || []))),
       loadConfig().catch((e) => console.error('[home] loadConfig failed:', e)),
       getDictByTypeApi('vehicle_type').then((r) => (vehicleTypes.value = r || []))
     ]
@@ -363,6 +363,20 @@ function statusClass(status: string): string {
 
 function formatPrice(p: number | string): string {
   return moneyUtil.format(Number(p || 0))
+}
+
+function filterAvailableCoupons(list: CouponVO[]): CouponVO[] {
+  const userLevel = userStore.user?.level
+  if (!userLevel) {
+    // 未登录仅展示全量券，不展示会员等级专属券
+    return list.filter((c) => !c.grantType || c.grantType === 'all')
+  }
+  // all 券始终展示；level 券需会员等级与目标等级精确一致；user/targeted 后端已排除
+  return list.filter((c) => {
+    if (!c.grantType || c.grantType === 'all') return true
+    if (c.grantType === 'level') return c.targetLevel === userLevel
+    return false
+  })
 }
 
 function couponFaceValue(c: CouponVO): string {
