@@ -60,14 +60,15 @@ const menuGroups = computed<MenuGroup[]>(() => [
     title: '订单服务',
     items: [
       { key: 'orders', label: '我的订单', icon: 'order', url: '/pages/order/list' },
-      { key: 'appointments', label: '我的预约', icon: 'calendar', url: '/pages/profile/appointments' },
+      { key: 'appointments', label: '预约/留言', icon: 'calendar', url: '/pages/profile/appointments' },
       {
         key: 'reviews',
         label: '我的评价',
         icon: 'star',
         url: '/pages/profile/reviews',
         badge: reviewCount.value
-      }
+      },
+      { key: 'complaint', label: '我的投诉', icon: 'warning', url: '/pages/profile/complaint-list' }
     ]
   },
   {
@@ -206,7 +207,7 @@ function verifyStatusClass(s?: string): string {
           >
             <view class="item-left">
               <view class="item-icon">
-                <u-icon :name="item.icon" color="#ff2e2e" size="30rpx"></u-icon>
+                <u-icon :name="item.icon" color="#ff2e2e" size="32rpx"></u-icon>
               </view>
               <text class="item-label">{{ item.label }}</text>
             </view>
@@ -274,11 +275,11 @@ function verifyStatusClass(s?: string): string {
 .user-card {
   display: flex;
   align-items: center;
-  margin: 12rpx 20rpx 4rpx;
-  padding: 24rpx 20rpx;
+  margin: 16rpx 20rpx 8rpx;
+  padding: 28rpx 24rpx;
   background: linear-gradient(135deg, rgba(255, 46, 46, 0.1) 0%, var(--card-bg) 100%);
   border: 1rpx solid var(--border-color);
-  border-radius: 14rpx;
+  border-radius: 12rpx;
 }
 
 .avatar-wrap {
@@ -318,13 +319,17 @@ function verifyStatusClass(s?: string): string {
   font-size: 32rpx;
   font-weight: 700;
   color: var(--text-main);
-  margin-bottom: 6rpx;
+  margin-bottom: 8rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .user-meta {
   display: flex;
   gap: 12rpx;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .verify-tag {
@@ -355,27 +360,29 @@ function verifyStatusClass(s?: string): string {
 
 .login-btn {
   flex-shrink: 0;
-  padding: 10rpx 20rpx;
+  margin-left: 16rpx;
+  padding: 12rpx 28rpx;
   background-color: rgba(255, 46, 46, 0.12);
   color: #ff2e2e;
-  font-size: 22rpx;
-  border-radius: 8rpx;
+  font-size: 24rpx;
+  border-radius: 999rpx;
   border: 1rpx solid #ff2e2e;
 }
 
 /* 分组菜单（紧凑） */
 .menu-area {
-  padding: 8rpx 20rpx 0;
+  padding: 16rpx 20rpx 0;
 }
 
 .menu-group {
-  margin-bottom: 16rpx;
+  margin-bottom: 20rpx;
 }
 
 .group-title {
   font-size: 22rpx;
   color: var(--text-dim);
-  padding: 4rpx 8rpx 8rpx;
+  padding: 4rpx 16rpx 8rpx;
+  letter-spacing: 2rpx;
 }
 
 .group-card {
@@ -389,7 +396,7 @@ function verifyStatusClass(s?: string): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18rpx 20rpx;
+  padding: 22rpx 24rpx;
   border-bottom: 1rpx solid var(--border-color);
 
   &.no-border {
@@ -404,28 +411,28 @@ function verifyStatusClass(s?: string): string {
 .item-left {
   display: flex;
   align-items: center;
-  gap: 16rpx;
+  gap: 20rpx;
 }
 
 .item-icon {
-  width: 44rpx;
-  height: 44rpx;
+  width: 56rpx;
+  height: 56rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   background-color: rgba(255, 46, 46, 0.1);
-  border-radius: 8rpx;
+  border-radius: 12rpx;
 }
 
 .item-label {
-  font-size: 26rpx;
+  font-size: 28rpx;
   color: var(--text-main);
 }
 
 .item-right {
   display: flex;
   align-items: center;
-  gap: 10rpx;
+  gap: 12rpx;
 }
 
 .item-value {
@@ -451,15 +458,15 @@ function verifyStatusClass(s?: string): string {
 }
 
 .item-badge {
-  min-width: 30rpx;
-  height: 30rpx;
-  padding: 0 8rpx;
+  min-width: 32rpx;
+  height: 32rpx;
+  padding: 0 10rpx;
   background-color: #ff2e2e;
   color: #fff;
-  font-size: 18rpx;
-  line-height: 30rpx;
+  font-size: 20rpx;
+  line-height: 32rpx;
   text-align: center;
-  border-radius: 15rpx;
+  border-radius: 16rpx;
 }
 
 .tabbar-placeholder {

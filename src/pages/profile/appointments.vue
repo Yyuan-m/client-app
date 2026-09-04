@@ -1,22 +1,23 @@
 <script setup lang="ts">
 /**
- * 我的预约页 - 预约咨询记录管理
+ * 我的预约/留言页 - 预约咨询与留言反馈记录管理
  *
- * 功能：状态筛选 tabs（全部/待处理/已处理/已取消）
+ * 功能：类型筛选（全部/预约咨询/留言反馈）+ 状态筛选 tabs（全部/待处理/已处理/已取消）
  * + 分页加载（触底加载更多）+ 取消预约（u-modal 确认）
  * + 处理进度时间线（提交 → 客服处理，含处理人/处理说明/处理时间）
  * 未登录：空态引导登录
  *
  * 状态机（与后台管理系统对齐）：pending 待处理 / handled 已处理 / cancelled 已取消
+ * 类型（同一张 feedback 表，用 type 区分）：appointment 预约咨询 / feedback 留言反馈
  * API: getMyAppointmentsApi / cancelAppointmentApi
  */
 import { ref, computed } from 'vue'
 import { onShow, onReachBottom } from '@dcloudio/uni-app'
 import { useUserStore } from '@/stores/user'
-import { getMyAppointmentsApi, cancelAppointmentApi } from '@/api/modules/feedback'
+import { getMyAppointmentsApi, cancelAppointmentApi, getContactInfoApi } from '@/api/modules/feedback'
 import { useThemeClass } from '@/composables/useThemeClass'
 import { useNavigationBar } from '@/composables/useNavigationBar'
-import type { AppointmentVO } from '@/api/types'
+import type { AppointmentVO, ContactInfoVO } from '@/api/types'
 
 const userStore = useUserStore()
 const { themeClass, appStore } = useThemeClass()
@@ -24,6 +25,14 @@ const { themeClass, appStore } = useThemeClass()
 useNavigationBar()
 /** 加载动画颜色：随深浅主题切换 */
 const loadingColor = computed(() => (appStore.isDark ? '#aeaeb2' : '#6e6e73'))
+
+// 类型筛选 tabs
+const typeTabs = [
+  { value: '', label: '全部类型' },
+  { value: 'appointment', label: '预约咨询' },
+  { value: 'feedback', label: '留言反馈' }
+]
+const activeType = ref('')
 
 // 状态筛选 tabs
 const tabs = [
@@ -44,11 +53,41 @@ const showCancelModal = ref(false)
 const cancelTarget = ref<AppointmentVO | null>(null)
 const cancelling = ref(false)
 
+// 状态筛选底部弹层
+const showStatusPopup = ref(false)
+
+// 联系人详情：key 为 id，value 为完整 { name, phone }
+const contactMap = ref<Record<number, ContactInfoVO>>({})
+const contactLoadingId = ref<number | null>(null)
+
+async function toggleContact(item: AppointmentVO) {
+  if (contactMap.value[item.id]) {
+    const next = { ...contactMap.value }
+    delete next[item.id]
+    contactMap.value = next
+    return
+  }
+  contactLoadingId.value = item.id
+  try {
+    const res = await getContactInfoApi(item.id)
+    contactMap.value = { ...contactMap.value, [item.id]: res }
+  } catch (e) {
+    console.error('[appointments] getContactInfo failed:', e)
+  } finally {
+    contactLoadingId.value = null
+  }
+}
+
 const emptyText = computed(() => {
-  if (activeStatus.value === 'pending') return '暂无待处理的预约'
-  if (activeStatus.value === 'handled') return '暂无已处理的预约'
-  if (activeStatus.value === 'cancelled') return '暂无已取消的预约'
-  return '暂无预约记录'
+  const base = activeStatus.value === 'pending' ? '暂无待处理的记录'
+    : activeStatus.value === 'handled' ? '暂无已处理的记录'
+    : activeStatus.value === 'cancelled' ? '暂无已取消的记录'
+    : '暂无记录'
+  if (activeType.value === 'appointment' && activeStatus.value) return base.replace('记录', '预约')
+  if (activeType.value === 'feedback' && activeStatus.value) return base.replace('记录', '留言')
+  if (activeType.value === 'appointment') return '暂无预约记录'
+  if (activeType.value === 'feedback') return '暂无留言记录'
+  return base
 })
 
 onShow(() => {
@@ -76,7 +115,8 @@ async function loadList(reset: boolean) {
     const res = await getMyAppointmentsApi({
       page: page.current,
       pageSize: page.pageSize,
-      status: activeStatus.value || undefined
+      status: activeStatus.value || undefined,
+      type: activeType.value || undefined
     })
     const items = res.list || []
     if (reset) list.value = items
@@ -93,6 +133,23 @@ async function loadList(reset: boolean) {
 function onTabChange(status: string) {
   if (activeStatus.value === status) return
   activeStatus.value = status
+  reload()
+}
+
+/** 底部弹层选择状态后应用并关闭 */
+function onStatusSelect(status: string) {
+  showStatusPopup.value = false
+  onTabChange(status)
+}
+
+/** 状态中文名（用于顶部筛选按钮回显） */
+function statusLabel(val: string): string {
+  return tabs.find((t) => t.value === val)?.label || '全部'
+}
+
+function onTypeChange(type: string) {
+  if (activeType.value === type) return
+  activeType.value = type
   reload()
 }
 
@@ -159,20 +216,54 @@ function goLogin() {
     </view>
 
     <template v-else>
-      <!-- 状态筛选 tabs -->
-      <scroll-view scroll-x class="tabs-scroll" :show-scrollbar="false">
-        <view class="tabs-row">
+      <!-- 顶部工具栏：类型分段控制 + 状态筛选按钮 -->
+      <view class="filter-bar">
+        <view class="segment-tabs">
           <view
-            v-for="tab in tabs"
+            v-for="tab in typeTabs"
             :key="tab.value"
-            class="tab-item"
-            :class="{ active: activeStatus === tab.value }"
-            @tap="onTabChange(tab.value)"
+            class="segment-item"
+            :class="{ active: activeType === tab.value }"
+            @tap="onTypeChange(tab.value)"
           >
             {{ tab.label }}
           </view>
+          <view class="segment-slider" :class="`slider-${activeType || 'all'}`"></view>
         </view>
-      </scroll-view>
+        <view class="filter-btn" @tap="showStatusPopup = true">
+          <text class="filter-btn-text">{{ statusLabel(activeStatus) }}</text>
+          <text class="filter-arrow" :class="{ open: showStatusPopup }">▾</text>
+        </view>
+      </view>
+
+      <!-- 状态筛选底部弹层 -->
+      <u-popup
+        :show="showStatusPopup"
+        mode="bottom"
+        :round="16"
+        :safeAreaInsetBottom="true"
+        @close="showStatusPopup = false"
+      >
+        <view class="status-sheet">
+          <view class="sheet-title">筛选状态</view>
+          <view class="sheet-options">
+            <view
+              v-for="tab in tabs"
+              :key="tab.value"
+              class="sheet-option"
+              :class="{ active: activeStatus === tab.value }"
+              @tap="onStatusSelect(tab.value)"
+            >
+              <text>{{ tab.label }}</text>
+              <text v-if="activeStatus === tab.value" class="sheet-check">✓</text>
+            </view>
+          </view>
+          <view class="sheet-actions">
+            <view class="sheet-reset" @tap="onStatusSelect('')">重置</view>
+            <view class="sheet-cancel" @tap="showStatusPopup = false">取消</view>
+          </view>
+        </view>
+      </u-popup>
 
       <!-- 加载中（首次） -->
       <view v-if="loading && !list.length" class="loading-wrap">
@@ -191,30 +282,42 @@ function goLogin() {
       <view v-else class="appt-list">
         <view v-for="item in list" :key="item.id" class="appt-card" :class="cardClass(item.status)">
           <view class="appt-header">
-            <text class="appt-no">NO.{{ apptNo(item.id) }}</text>
+            <view class="appt-header-left">
+              <text class="appt-no">NO.{{ apptNo(item.id) }}</text>
+              <text v-if="item.type" class="appt-type" :class="`type-${item.type}`">{{ item.typeName || (item.type === 'appointment' ? '预约咨询' : '留言反馈') }}</text>
+            </view>
             <view class="appt-status" :class="statusClass(item.status)">
               <view class="status-dot"></view>
               <text>{{ item.statusName || '待处理' }}</text>
             </view>
           </view>
 
-          <!-- 车型主行 -->
-          <view class="appt-car-row">
-            <text class="appt-car-icon">🚗</text>
-            <text class="appt-car-name">{{ item.carType || '车型不限' }}</text>
-            <view v-if="item.rentDate" class="appt-date-chip">
-              <text>📅 {{ item.rentDate }}</text>
+          <!-- 车型卡：仅预约咨询有车型/取车日期 -->
+          <view v-if="item.type !== 'feedback'" class="car-panel">
+            <text class="car-name">{{ item.carType || '车型不限' }}</text>
+            <view v-if="item.rentDate" class="date-chip">
+              <text class="date-chip-icon">📅</text>
+              <text class="date-chip-text">{{ item.rentDate }} 取车</text>
             </view>
           </view>
 
-          <!-- 基本信息 -->
-          <view class="info-row">
-            <text class="info-label">联系人</text>
-            <text class="info-value">{{ item.name }}（{{ item.phone }}）</text>
-          </view>
-          <view v-if="item.content" class="info-row">
-            <text class="info-label">留言</text>
-            <text class="info-value">{{ item.content }}</text>
+          <!-- 联系信息卡 -->
+          <view class="contact-panel">
+            <view class="contact-row">
+              <text class="contact-label">联系人</text>
+              <view class="contact-main">
+                <text v-if="contactMap[item.id]" class="contact-value contact-full">{{ contactMap[item.id].name }}（{{ contactMap[item.id].phone }}）</text>
+                <text v-else class="contact-value">{{ item.name }}（{{ item.phone }}）</text>
+                <text
+                  class="contact-toggle"
+                  @tap.stop="toggleContact(item)"
+                >{{ contactLoadingId === item.id ? '加载中' : (contactMap[item.id] ? '隐藏' : '查看') }}</text>
+              </view>
+            </view>
+            <view v-if="item.content" class="contact-row contact-msg">
+              <text class="contact-label">留言</text>
+              <text class="contact-value">{{ item.content }}</text>
+            </view>
           </view>
 
           <!-- 处理进度时间线 -->
@@ -222,7 +325,7 @@ function goLogin() {
             <view class="tl-item">
               <view class="tl-dot tl-dot-done"></view>
               <view class="tl-content">
-                <text class="tl-title">提交预约</text>
+                <text class="tl-title">{{ item.type === 'feedback' ? '提交留言' : '提交预约' }}</text>
                 <text class="tl-time">{{ formatTime(item.createTime) }}</text>
               </view>
             </view>
@@ -286,33 +389,139 @@ function goLogin() {
   padding: 16rpx 20rpx calc(48rpx + env(safe-area-inset-bottom));
 }
 
-/* 状态筛选 */
-.tabs-scroll {
-  white-space: nowrap;
+/* 顶部工具栏：类型分段控制 + 状态筛选按钮 */
+.filter-bar {
+  display: flex;
+  align-items: center;
   margin-bottom: 20rpx;
 }
 
-.tabs-row {
-  display: inline-flex;
-  gap: 12rpx;
+.segment-tabs {
+  position: relative;
+  flex: 1;
+  display: flex;
+  padding: 4rpx;
+  background-color: var(--border-color);
+  border-radius: 16rpx;
 }
 
-.tab-item {
-  padding: 10rpx 32rpx;
+.segment-item {
+  flex: 1;
+  position: relative;
+  z-index: 1;
+  text-align: center;
   font-size: 24rpx;
   color: var(--text-sub);
+  padding: 10rpx 0;
+  transition: color 0.2s;
+
+  &.active { color: var(--text-main); font-weight: 600; }
+}
+
+/* 分段滑块：根据选中类型滑动 */
+.segment-slider {
+  position: absolute;
+  top: 4rpx;
+  bottom: 4rpx;
+  width: calc((100% - 8rpx) / 3);
   background-color: var(--card-bg);
+  border-radius: 12rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+  transition: transform 0.25s ease;
+
+  &.slider-all { transform: translateX(0); }
+  &.slider-appointment { transform: translateX(100%); }
+  &.slider-feedback { transform: translateX(200%); }
+}
+
+.filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  margin-left: 16rpx;
+  padding: 10rpx 20rpx;
   border: 1rpx solid var(--border-color);
-  border-radius: 28rpx;
+  border-radius: 16rpx;
+  background-color: var(--card-bg);
   flex-shrink: 0;
+}
+
+.filter-btn-text {
+  font-size: 24rpx;
+  color: var(--text-sub);
+}
+
+.filter-arrow {
+  font-size: 20rpx;
+  color: var(--text-dim);
+  transition: transform 0.2s;
+
+  &.open { transform: rotate(180deg); }
+}
+
+/* 状态筛选底部弹层 */
+.status-sheet {
+  padding: 32rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
+}
+
+.sheet-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 20rpx;
+}
+
+.sheet-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.sheet-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  min-width: 200rpx;
+  padding: 16rpx 28rpx;
+  font-size: 26rpx;
+  color: var(--text-sub);
+  background-color: var(--border-color);
+  border-radius: 14rpx;
   transition: all 0.2s;
 
   &.active {
     color: #ff2e2e;
-    border-color: #ff2e2e;
     background-color: rgba(255, 46, 46, 0.08);
-    font-weight: 500;
+    font-weight: 600;
   }
+
+  .sheet-check { font-size: 24rpx; }
+}
+
+.sheet-actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 28rpx;
+}
+
+.sheet-reset,
+.sheet-cancel {
+  flex: 1;
+  text-align: center;
+  padding: 16rpx 0;
+  font-size: 26rpx;
+  border-radius: 14rpx;
+}
+
+.sheet-reset {
+  color: var(--text-sub);
+  background-color: var(--fill-color);
+}
+
+.sheet-cancel {
+  color: #fff;
+  background-color: #ff2e2e;
 }
 
 .loading-wrap,
@@ -353,13 +562,10 @@ function goLogin() {
 .appt-card {
   background-color: var(--card-bg);
   border: 1rpx solid var(--border-color);
-  border-left: 6rpx solid #8e8e93;
-  border-radius: 14rpx;
-  padding: 24rpx;
+  border-radius: 16rpx;
+  padding: 24rpx 24rpx 20rpx;
 
-  &.card-pending { border-left-color: #ff9900; }
-  &.card-handled { border-left-color: #07c160; }
-  &.card-cancelled { border-left-color: #8e8e93; opacity: 0.72; }
+  &.card-cancelled { opacity: 0.6; }
 }
 
 .appt-header {
@@ -367,23 +573,45 @@ function goLogin() {
   align-items: center;
   justify-content: space-between;
   padding-bottom: 16rpx;
-  border-bottom: 1rpx solid var(--border-color);
-  margin-bottom: 20rpx;
+  margin-bottom: 8rpx;
+}
+
+.appt-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
 }
 
 .appt-no {
-  font-size: 22rpx;
+  font-size: 20rpx;
   color: var(--text-dim);
   letter-spacing: 2rpx;
+}
+
+.appt-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+/* 类型徽标：预约咨询 / 留言反馈 */
+.appt-type {
+  font-size: 18rpx;
+  font-weight: 500;
+  padding: 2rpx 14rpx;
+  border-radius: 20rpx;
+
+  &.type-appointment { color: #409eff; background-color: rgba(64, 158, 255, 0.12); }
+  &.type-feedback { color: #ff9900; background-color: rgba(255, 153, 0, 0.14); }
 }
 
 .appt-status {
   display: flex;
   align-items: center;
-  gap: 8rpx;
-  font-size: 22rpx;
+  gap: 6rpx;
+  font-size: 20rpx;
   font-weight: 500;
-  padding: 4rpx 18rpx;
+  padding: 4rpx 16rpx;
   border-radius: 24rpx;
 
   .status-dot {
@@ -398,54 +626,95 @@ function goLogin() {
   &.st-cancelled { color: var(--text-dim); background-color: var(--border-color); }
 }
 
-/* 车型主行 */
-.appt-car-row {
+/* 车型卡片：预约专用，浅色底凸显车型 */
+.car-panel {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   flex-wrap: wrap;
   gap: 12rpx;
+  padding: 18rpx 20rpx;
   margin-bottom: 16rpx;
+  border-radius: 12rpx;
+  background-color: rgba(64, 158, 255, 0.08);
+  border: 1rpx solid rgba(64, 158, 255, 0.15);
 }
 
-.appt-car-icon {
-  font-size: 32rpx;
-}
-
-.appt-car-name {
+.car-name {
   font-size: 30rpx;
   font-weight: 600;
   color: var(--text-main);
 }
 
-.appt-date-chip {
+.date-chip {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
   padding: 4rpx 16rpx;
   border-radius: 20rpx;
-  background-color: rgba(64, 158, 255, 0.12);
-
-  text {
-    font-size: 20rpx;
-    color: #409eff;
-  }
+  background-color: var(--card-bg);
 }
 
-.info-row {
+.date-chip-icon { font-size: 22rpx; }
+.date-chip-text { font-size: 20rpx; color: #409eff; }
+
+/* 联系信息卡：柔和分隔的字段卡 */
+.contact-panel {
+  margin-bottom: 8rpx;
+}
+
+.contact-row {
   display: flex;
-  margin-bottom: 12rpx;
+  align-items: flex-start;
+  padding: 10rpx 0;
+  font-size: 24rpx;
 }
 
-.info-label {
+.contact-label {
   flex-shrink: 0;
-  width: 108rpx;
-  font-size: 22rpx;
+  width: 96rpx;
+  font-size: 20rpx;
   color: var(--text-dim);
+  line-height: 34rpx;
 }
 
-.info-value {
+.contact-main {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
   flex: 1;
   min-width: 0;
-  font-size: 22rpx;
+}
+
+.contact-value {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text-sub);
-  word-break: break-all;
+  line-height: 34rpx;
+}
+
+.contact-full {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.contact-toggle {
+  flex-shrink: 0;
+  font-size: 20rpx;
+  color: #ff2e2e;
+  padding: 2rpx 14rpx;
+  border: 1rpx solid rgba(255, 46, 46, 0.4);
+  border-radius: 20rpx;
+  background-color: rgba(255, 46, 46, 0.06);
+
+  &:active { opacity: 0.7; }
+}
+
+.contact-msg {
+  border-top: 1rpx dashed var(--border-color);
 }
 
 /* 处理进度时间线 */

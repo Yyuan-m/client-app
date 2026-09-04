@@ -13,7 +13,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/stores/user'
 import { useCartStore } from '@/stores/cart'
 import { resolveAdminImage } from '@/utils/image'
-import { moneyUtil } from '@/utils'
+import { moneyUtil, dateUtil } from '@/utils'
 import type { CartItem } from '@/stores/cart'
 import type { PriceDetailVO } from '@/api/types'
 import { getCustomNavTopOffset } from '@/utils/navbar'
@@ -133,6 +133,88 @@ function getPriceDetail(carId: number): PriceDetailVO | undefined {
 function formatPrice(p: number | null | undefined): string {
   return moneyUtil.format(Number(p || 0))
 }
+
+// ============ 购物车内改期（底部弹层，选完立即生效并重算价格） ============
+/** 改期弹层显隐 */
+const showDateModal = ref(false)
+/** 当前改期的购物车项 */
+const dateTarget = ref<CartItem | null>(null)
+/** 弹层内编辑中的取/还车日期 */
+const editStart = ref('')
+const editEnd = ref('')
+/** 最小可选日期（今天） */
+const minPickDate = dateUtil.today()
+/** 快捷租期选项 */
+const quickPickOptions = [3, 7, 15, 30]
+
+/** 弹层内租期天数 */
+const editDays = computed(() => {
+  if (!editStart.value || !editEnd.value) return 0
+  return dateUtil.daysBetween(editStart.value, editEnd.value)
+})
+
+/** 打开改期弹层 */
+function openDateModal(item: CartItem) {
+  dateTarget.value = item
+  editStart.value = item.startDate
+  editEnd.value = item.endDate
+  showDateModal.value = true
+}
+
+/** 关闭改期弹层（不保存） */
+function closeDateModal() {
+  showDateModal.value = false
+  dateTarget.value = null
+}
+
+/** 应用改期：调用 store 更新（同步后端 + 重算价格），成功后关闭弹层 */
+async function applyDateChange() {
+  const item = dateTarget.value
+  if (!item || editDays.value < 1) return
+  const start = editStart.value
+  const end = editEnd.value
+  // 日期未变化则不重复提交
+  if (start === item.startDate && end === item.endDate) {
+    closeDateModal()
+    return
+  }
+  showDateModal.value = false
+  try {
+    await cartStore.updateItem(item.carId, start, end, editDays.value)
+    uni.showToast({ title: `租期已更新为${editDays.value}天`, icon: 'none' })
+  } catch (e) {
+    console.error('[cart] updateItem failed:', e)
+    uni.showToast({ title: '修改失败，请重试', icon: 'none' })
+  } finally {
+    dateTarget.value = null
+  }
+}
+
+/** 取车日变更：若还车日失效则自动顺延 1 天，随即生效并关闭 */
+function onEditStartChange(e: any) {
+  editStart.value = e.detail.value
+  if (!editEnd.value || dateUtil.daysBetween(editStart.value, editEnd.value) < 1) {
+    editEnd.value = dateUtil.addDays(editStart.value, 1)
+  }
+  applyDateChange()
+}
+
+/** 还车日变更：有效则立即生效并关闭，无效则提示且留在弹层内调整 */
+function onEditEndChange(e: any) {
+  editEnd.value = e.detail.value
+  if (dateUtil.daysBetween(editStart.value, editEnd.value) < 1) {
+    uni.showToast({ title: '还车日需晚于取车日', icon: 'none' })
+    return
+  }
+  applyDateChange()
+}
+
+/** 快捷选择租期：以当前取车日为基准顺延 N 天，立即生效 */
+function quickPickDays(days: number) {
+  if (!editStart.value) editStart.value = minPickDate
+  editEnd.value = dateUtil.addDays(editStart.value, days)
+  applyDateChange()
+}
 </script>
 
 <template>
@@ -171,9 +253,13 @@ function formatPrice(p: number | null | undefined): string {
         </view>
 
         <!-- 车辆信息 -->
-        <view class="item-info" @tap="onItemClick(item)">
-          <view class="item-name">{{ item.carName }}</view>
-          <view class="item-date">{{ item.startDate }} 至 {{ item.endDate }}</view>
+        <view class="item-info">
+          <view class="item-name" @tap="onItemClick(item)">{{ item.carName }}</view>
+          <!-- 点击日期行弹出改期弹层，选完立即生效并重算价格 -->
+          <view class="item-date" @tap.stop="openDateModal(item)">
+            <text class="date-text">{{ item.startDate }} 至 {{ item.endDate }}</text>
+            <text class="date-edit-hint">改期</text>
+          </view>
           <view class="item-rent-days">租期 {{ item.days }} 天</view>
           <view class="item-price">￥{{ formatPrice(item.dailyPrice) }}<text class="price-unit">/天</text></view>
 
@@ -228,6 +314,64 @@ function formatPrice(p: number | null | undefined): string {
     <!-- 底部 TabBar 占位 -->
     <view class="tabbar-placeholder"></view>
     <TabBar active="pages/cart/index" />
+
+    <!-- 改期底部弹层：取/还车日 + 快捷天数，选完立即生效 -->
+    <u-popup
+      :show="showDateModal"
+      mode="bottom"
+      :round="16"
+      :safe-area-inset-bottom="true"
+      :z-index="998"
+      @close="closeDateModal"
+    >
+      <view class="date-modal">
+        <view class="date-modal-header">
+          <text class="date-modal-title">修改租期</text>
+          <view class="date-modal-close" @tap="closeDateModal"><text>×</text></view>
+        </view>
+        <text v-if="dateTarget" class="date-modal-car">{{ dateTarget.carName }}</text>
+
+        <!-- 取/还车日期 -->
+        <view class="date-modal-row">
+          <view class="date-modal-item">
+            <text class="date-modal-label">取车日</text>
+            <picker mode="date" :value="editStart" :start="minPickDate" @change="onEditStartChange">
+              <view class="date-modal-value">{{ editStart || '请选择' }}</view>
+            </picker>
+          </view>
+          <text class="date-modal-arrow">→</text>
+          <view class="date-modal-item">
+            <text class="date-modal-label">还车日</text>
+            <picker
+              mode="date"
+              :value="editEnd"
+              :start="dateUtil.addDays(editStart || minPickDate, 1)"
+              @change="onEditEndChange"
+            >
+              <view class="date-modal-value">{{ editEnd || '请选择' }}</view>
+            </picker>
+          </view>
+        </view>
+
+        <!-- 快捷天数 -->
+        <view class="date-modal-quick">
+          <view
+            v-for="d in quickPickOptions"
+            :key="d"
+            class="quick-chip"
+            :class="{ active: editDays === d }"
+            @tap="quickPickDays(d)"
+          >
+            {{ d }}天
+          </view>
+        </view>
+
+        <!-- 租期提示 -->
+        <view v-if="editDays >= 1" class="date-modal-tip">
+          <text>租期 {{ editDays }} 天，修改后价格将实时刷新</text>
+        </view>
+      </view>
+    </u-popup>
 
     <!-- 移除确认弹窗 -->
     <u-modal
@@ -385,9 +529,142 @@ function formatPrice(p: number | null | undefined): string {
 }
 
 .item-date {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 8rpx;
   font-size: 22rpx;
   color: var(--text-sub);
   margin-bottom: 4rpx;
+  padding: 2rpx 10rpx;
+  border: 1rpx dashed var(--border-color);
+  border-radius: 6rpx;
+
+  &:active {
+    border-color: #ff2e2e;
+    background-color: rgba(255, 46, 46, 0.06);
+  }
+}
+
+.date-edit-hint {
+  font-size: 20rpx;
+  color: #ff2e2e;
+}
+
+/* 改期底部弹层 */
+.date-modal {
+  padding: 32rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
+  background-color: var(--card-bg);
+}
+
+.date-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8rpx;
+}
+
+.date-modal-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.date-modal-close {
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+
+  &:active {
+    background-color: var(--border-color);
+  }
+
+  text {
+    font-size: 40rpx;
+    color: var(--text-sub);
+    line-height: 1;
+  }
+}
+
+.date-modal-car {
+  display: block;
+  font-size: 24rpx;
+  color: var(--text-sub);
+  margin-bottom: 24rpx;
+}
+
+.date-modal-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 24rpx;
+}
+
+.date-modal-item {
+  flex: 1;
+}
+
+.date-modal-label {
+  display: block;
+  font-size: 22rpx;
+  color: var(--text-dim);
+  margin-bottom: 8rpx;
+}
+
+.date-modal-value {
+  height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26rpx;
+  color: var(--text-main);
+  background-color: var(--page-bg);
+  border: 1rpx solid var(--border-color);
+  border-radius: 8rpx;
+}
+
+.date-modal-arrow {
+  font-size: 28rpx;
+  color: var(--text-dim);
+  margin-top: 30rpx;
+}
+
+.date-modal-quick {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.quick-chip {
+  flex: 1;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26rpx;
+  color: var(--text-sub);
+  background-color: var(--page-bg);
+  border: 1rpx solid var(--border-color);
+  border-radius: 8rpx;
+
+  &.active {
+    color: #ff2e2e;
+    border-color: #ff2e2e;
+    background-color: rgba(255, 46, 46, 0.06);
+  }
+
+  &:active {
+    opacity: 0.8;
+  }
+}
+
+.date-modal-tip {
+  font-size: 22rpx;
+  color: var(--text-dim);
+  text-align: center;
 }
 
 .item-rent-days {

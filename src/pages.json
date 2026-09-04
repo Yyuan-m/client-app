@@ -92,7 +92,26 @@
     {
       "path": "pages/profile/appointments",
       "style": {
-        "navigationBarTitleText": "我的预约"
+        "navigationBarTitleText": "预约/留言"
+      }
+    },
+    {
+      "path": "pages/profile/complaint",
+      "style": {
+        "navigationBarTitleText": "售后投诉"
+      }
+    },
+    {
+      "path": "pages/profile/complaint-list",
+      "style": {
+        "navigationBarTitleText": "我的投诉",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/profile/complaint-detail",
+      "style": {
+        "navigationBarTitleText": "投诉详情"
       }
     },
     {

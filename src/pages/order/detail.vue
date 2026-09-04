@@ -221,6 +221,12 @@ function goRentContinue() {
   uni.navigateTo({ url: `/pages/vehicle/detail?id=${order.value.carId}` })
 }
 
+/** 投诉：带订单号跳转投诉页预填 */
+function goComplaint() {
+  const no = order.value?.orderNo || ''
+  uni.navigateTo({ url: `/pages/profile/complaint${no ? '?orderNo=' + encodeURIComponent(no) : ''}` })
+}
+
 function showCompleteConfirm() {
   showCompleteModal.value = true
 }
@@ -374,12 +380,14 @@ function goOrderList() {
           <view class="action-btn btn-complete" :class="{ disabled: submitting }" @tap="showCompleteConfirm">
             确认还车
           </view>
+          <view class="action-btn btn-complaint" @tap="goComplaint">投诉</view>
         </template>
         <template v-else-if="order.status === 'completed'">
           <view v-if="canReview" class="action-btn btn-review" @tap="openReviewDialog">
             {{ reviewBtnText }}
           </view>
           <view v-else class="action-btn btn-disabled">{{ reviewBtnText }}</view>
+          <view class="action-btn btn-complaint" @tap="goComplaint">投诉</view>
         </template>
         <template v-else>
           <view class="action-tip">订单已取消</view>
@@ -663,6 +671,12 @@ function goOrderList() {
 .btn-review {
   background-color: #ff2e2e;
   color: #fff;
+}
+
+.btn-complaint {
+  background-color: rgba(255, 46, 46, 0.12);
+  color: #ff2e2e;
+  border: 1rpx solid #ff2e2e;
 }
 
 .btn-disabled {

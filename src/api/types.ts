@@ -505,9 +505,13 @@ export interface SubmitFeedbackPayload {
   content?: string
 }
 
-/** 我的预约项（后端 AppointmentVO） */
+/** 我的预约/留言项（后端 AppointmentVO） */
 export interface AppointmentVO {
   id: number
+  /** 类型：appointment 预约咨询 / feedback 留言反馈 */
+  type?: string
+  /** 类型中文名：预约咨询 / 留言反馈 */
+  typeName?: string
   carType?: string
   rentDate?: string
   name?: string
@@ -530,4 +534,45 @@ export interface AppointmentPageVO {
   total: number
   page: number
   pageSize: number
+}
+
+/** 联系人完整信息（仅本人可查，未脱敏） */
+export interface ContactInfoVO {
+  id: number
+  name?: string
+  phone?: string
+}
+
+// ============ 13. complaint 模块 ============
+/** 我的投诉记录项（后端 ComplaintVO） */
+export interface ComplaintVO {
+  id: number
+  /** 工单编号 */
+  ticketNo?: string
+  /** 关联订单号 */
+  orderNo?: string
+  /** 客户姓名 */
+  customerName?: string
+  /** 投诉类型（dictValue） */
+  type: string
+  /** 投诉类型中文名 */
+  typeName?: string
+  /** 投诉描述 */
+  description?: string
+  /** 凭证图片（相对路径数组） */
+  images?: string[]
+  /** 优先级 */
+  priority?: string
+  /** pending 待处理 / processing 处理中 / resolved 已解决 / rejected 已驳回 */
+  status: string
+  /** 状态中文名 */
+  statusName?: string
+  /** 处理方案 */
+  solution?: string
+  /** 处理人员（后台处理人账号） */
+  assignee?: string
+  /** 满意度评分：0=未评，1-5星（后台处理完成后由用户评分） */
+  satisfaction?: number
+  /** 提交时间 */
+  createdAt?: string
 }

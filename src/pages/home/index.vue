@@ -313,6 +313,15 @@ async function submitAppointment() {
   }
 }
 
+/** 首页底部：我的投诉入口（列表页内含去投诉） */
+function goComplaint() {
+  if (!userStore.isLoggedIn) {
+    uni.navigateTo({ url: '/pages/auth/login?redirect=' + encodeURIComponent('/pages/profile/complaint-list') })
+    return
+  }
+  uni.navigateTo({ url: '/pages/profile/complaint-list' })
+}
+
 function onRentDateChange(e: any) {
   appointmentForm.rentDate = e.detail.value
 }
@@ -611,7 +620,7 @@ function todayPlus(days: number): string {
               </view>
               <view v-if="parseReviewImages(rv.images).length" class="review-images">
                 <image
-                  v-for="(img, idx) in parseReviewImages(rv.images).slice(0, 3)"
+                  v-for="(img, idx) in parseReviewImages(rv.images)"
                   :key="idx"
                   :src="img"
                   class="review-img"
@@ -698,6 +707,16 @@ function todayPlus(days: number): string {
           </view>
           <u-button type="primary" shape="square" text="提交预约" :loading="submittingAppointment" @click="submitAppointment" />
         </view>
+      </view>
+
+      <!-- 售后投诉入口 -->
+      <view class="complaint-entry" @tap="goComplaint">
+        <view class="ce-icon"><u-icon name="warning" size="40rpx" color="#fff"></u-icon></view>
+        <view class="ce-main">
+          <view class="ce-title">售后投诉</view>
+          <view class="ce-desc">如遇车况、服务、费用等问题，可在此提交投诉，我们将尽快处理</view>
+        </view>
+        <view class="ce-arrow">›</view>
       </view>
 
     <!-- 底部 TabBar -->
@@ -1228,14 +1247,18 @@ function todayPlus(days: number): string {
 
 .review-images {
   display: flex;
+  flex-wrap: wrap;
   gap: 8rpx;
   margin-top: 16rpx;
 }
 
 .review-img {
-  width: 160rpx;
-  height: 160rpx;
+  /* 卡片内宽 472rpx（520rpx - 2×24rpx padding），一行恰好放 3 张 150rpx + 2 个 8rpx 间距 */
+  width: 150rpx;
+  height: 150rpx;
   border-radius: 8rpx;
+  flex-shrink: 0;
+  background-color: var(--page-bg);
 }
 
 /* 优惠券 */
@@ -1361,5 +1384,52 @@ function todayPlus(days: number): string {
 
 .tabbar-placeholder {
   height: 100rpx;
+}
+
+/* 售后投诉入口 */
+.complaint-entry {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  margin: 0 32rpx 24rpx;
+  padding: 24rpx;
+  background-color: var(--card-bg);
+  border: 1rpx solid var(--border-color);
+  border-radius: 16rpx;
+
+  .ce-icon {
+    width: 72rpx;
+    height: 72rpx;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12rpx;
+    background-color: #ff2e2e;
+  }
+
+  .ce-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6rpx;
+
+    .ce-title {
+      font-size: 28rpx;
+      font-weight: 500;
+      color: var(--text-main);
+    }
+    .ce-desc {
+      font-size: 22rpx;
+      color: var(--text-sub);
+      line-height: 1.5;
+    }
+  }
+
+  .ce-arrow {
+    font-size: 40rpx;
+    color: var(--text-dim);
+  }
 }
 </style>
