@@ -9,13 +9,14 @@
  * 操作：单项移除（u-modal 确认）、清空购物车、去结算（校验登录 + 选中数量）
  */
 import { ref, computed, watch } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onShow, onHide, onUnload } from '@dcloudio/uni-app'
 import { useUserStore } from '@/stores/user'
 import { useCartStore } from '@/stores/cart'
+import { getCarAvailabilityApi } from '@/api/modules/car'
 import { resolveAdminImage } from '@/utils/image'
 import { moneyUtil, dateUtil } from '@/utils'
 import type { CartItem } from '@/stores/cart'
-import type { PriceDetailVO } from '@/api/types'
+import type { PriceDetailVO, CarAvailabilityVO } from '@/api/types'
 import { getCustomNavTopOffset } from '@/utils/navbar'
 import { useThemeClass } from '@/composables/useThemeClass'
 import { useNavigationBar } from '@/composables/useNavigationBar'
@@ -36,6 +37,49 @@ const removeTarget = ref<CartItem | null>(null)
 /** 自定义导航栏：顶部避开微信胶囊按钮 */
 const navTop = getCustomNavTopOffset()
 
+// ---------- 车辆可用期（已租出/整备期日期禁用） ----------
+/** carId → 可用期数据 */
+const availabilityMap = ref<Record<number, CarAvailabilityVO>>({})
+
+/** 加载购物车内所有车辆的可用期 */
+async function loadAvailability() {
+  const ids = [...new Set(cartStore.items.map((i) => i.carId))]
+  await Promise.all(
+    ids.map(async (carId) => {
+      try {
+        availabilityMap.value[carId] = await getCarAvailabilityApi(carId)
+      } catch (e) {
+        console.error('[cart] load availability failed:', carId, e)
+      }
+    })
+  )
+}
+
+function unavailableRangesOf(carId: number): { startDate: string; endDate: string }[] {
+  return availabilityMap.value[carId]?.unavailableRanges || []
+}
+
+/** 已租出/整备区间展示文案（如 "09-03~09-09"，多个区间用顿号连接） */
+function occupiedRangesText(carId: number): string {
+  return unavailableRangesOf(carId)
+    .map((r) => `${r.startDate.slice(5)}~${r.endDate.slice(5)}`)
+    .join('、')
+}
+
+/** 判断租期 [start, end)（YYYY-MM-DD）是否与不可用区间（含整备期）冲突 */
+function isRangeUnavailable(carId: number, start: string, end: string): boolean {
+  if (!start || !end) return false
+  return unavailableRangesOf(carId).some((r) => start < r.endDate && end > r.startDate)
+}
+
+/** 最早可选日期：今天 与 车辆最早可租日 取较大值（null 表示无占用） */
+function minSelectableDateOf(carId: number): string {
+  const today = dateUtil.today()
+  const av = availabilityMap.value[carId]?.availableDate
+  if (!av) return today
+  return av > today ? av : today
+}
+
 onShow(async () => {
   if (userStore.isLoggedIn) {
     loading.value = true
@@ -47,7 +91,45 @@ onShow(async () => {
       loading.value = false
     }
   }
+  startCartSync()
 })
+
+onHide(() => {
+  stopCartSync()
+})
+
+onUnload(() => {
+  stopCartSync()
+})
+
+// ---------- 跨端实时同步（与 web 端对称） ----------
+// 页面展示期间每 5 秒做一次远程摘要比对（覆盖另一端增删/改期/清空），不一致时全量刷新；
+// 页面隐藏/卸载时停止轮询，避免后台空耗请求
+const CART_SYNC_INTERVAL = 5000
+let cartSyncTimer: ReturnType<typeof setInterval> | null = null
+
+function startCartSync() {
+  stopCartSync()
+  if (!userStore.isLoggedIn) return
+  cartSyncTimer = setInterval(() => {
+    cartStore.checkRemoteSync()
+  }, CART_SYNC_INTERVAL)
+}
+
+function stopCartSync() {
+  if (cartSyncTimer) {
+    clearInterval(cartSyncTimer)
+    cartSyncTimer = null
+  }
+}
+
+// 购物车车辆变化时加载可用期
+watch(
+  () => cartStore.items.map((i) => i.carId).join(','),
+  () => {
+    loadAvailability()
+  }
+)
 
 // 监听选中项变化，刷新价格
 watch(
@@ -144,6 +226,8 @@ const editStart = ref('')
 const editEnd = ref('')
 /** 最小可选日期（今天） */
 const minPickDate = dateUtil.today()
+/** 弹层内最早可选日期（今天 或 车辆最早可租日，禁用已租出/整备期） */
+const editMinStart = ref(minPickDate)
 /** 快捷租期选项 */
 const quickPickOptions = [3, 7, 15, 30]
 
@@ -158,6 +242,11 @@ function openDateModal(item: CartItem) {
   dateTarget.value = item
   editStart.value = item.startDate
   editEnd.value = item.endDate
+  editMinStart.value = minSelectableDateOf(item.carId)
+  // 当前所选日期已落在不可用区间（如车辆被他人租出）时提示改期
+  if (isRangeUnavailable(item.carId, item.startDate, item.endDate)) {
+    uni.showToast({ title: '当前所选日期车辆不可租，请重新选择', icon: 'none' })
+  }
   showDateModal.value = true
 }
 
@@ -173,6 +262,11 @@ async function applyDateChange() {
   if (!item || editDays.value < 1) return
   const start = editStart.value
   const end = editEnd.value
+  // 所选租期落在已租出/整备期则拒绝（后端 updateItem 也会二次校验）
+  if (isRangeUnavailable(item.carId, start, end)) {
+    uni.showToast({ title: '该车在所选日期已被租出或在整备中，请更换租期', icon: 'none' })
+    return
+  }
   // 日期未变化则不重复提交
   if (start === item.startDate && end === item.endDate) {
     closeDateModal()
@@ -209,9 +303,12 @@ function onEditEndChange(e: any) {
   applyDateChange()
 }
 
-/** 快捷选择租期：以当前取车日为基准顺延 N 天，立即生效 */
+/** 快捷选择租期：以最早可选日起算（避开已租出/整备期），立即生效 */
 function quickPickDays(days: number) {
-  if (!editStart.value) editStart.value = minPickDate
+  // 起点钳制到最早可选日（今天 或 车辆最早可租日）
+  if (!editStart.value || editStart.value < editMinStart.value) {
+    editStart.value = editMinStart.value
+  }
   editEnd.value = dateUtil.addDays(editStart.value, days)
   applyDateChange()
 }
@@ -259,6 +356,12 @@ function quickPickDays(days: number) {
           <view class="item-date" @tap.stop="openDateModal(item)">
             <text class="date-text">{{ item.startDate }} 至 {{ item.endDate }}</text>
             <text class="date-edit-hint">改期</text>
+          </view>
+          <view v-if="occupiedRangesText(item.carId)" class="occupied-tip">
+            已租出：{{ occupiedRangesText(item.carId) }}
+          </view>
+          <view v-if="isRangeUnavailable(item.carId, item.startDate, item.endDate)" class="unavailable-tip">
+            所选日期车辆不可租（已租出/整备中），请改期
           </view>
           <view class="item-rent-days">租期 {{ item.days }} 天</view>
           <view class="item-price">￥{{ formatPrice(item.dailyPrice) }}<text class="price-unit">/天</text></view>
@@ -311,11 +414,12 @@ function quickPickDays(days: number) {
       </view>
     </view>
 
-    <!-- 底部 TabBar 占位 -->
-    <view class="tabbar-placeholder"></view>
-    <TabBar active="pages/cart/index" />
+    <!-- 底部 TabBar 占位（改期弹层打开时隐藏 TabBar，避免其悬浮在弹层上方遮挡内容） -->
+    <view v-if="!showDateModal" class="tabbar-placeholder"></view>
+    <TabBar v-if="!showDateModal" active="pages/cart/index" />
 
     <!-- 改期底部弹层：取/还车日 + 快捷天数，选完立即生效 -->
+    <!-- z-index 须低于 picker 日期选择面板（小程序原生层/H5 999+），保证日历弹窗在改期弹层之上 -->
     <u-popup
       :show="showDateModal"
       mode="bottom"
@@ -331,11 +435,16 @@ function quickPickDays(days: number) {
         </view>
         <text v-if="dateTarget" class="date-modal-car">{{ dateTarget.carName }}</text>
 
+        <!-- 已租出/整备期提示（主动展示不可选区间） -->
+        <view v-if="dateTarget && occupiedRangesText(dateTarget.carId)" class="date-modal-occupied">
+          已租出（含2天整备）：{{ occupiedRangesText(dateTarget.carId) }}，期间不可选
+        </view>
+
         <!-- 取/还车日期 -->
         <view class="date-modal-row">
           <view class="date-modal-item">
             <text class="date-modal-label">取车日</text>
-            <picker mode="date" :value="editStart" :start="minPickDate" @change="onEditStartChange">
+            <picker mode="date" :value="editStart" :start="editMinStart" @change="onEditStartChange">
               <view class="date-modal-value">{{ editStart || '请选择' }}</view>
             </picker>
           </view>
@@ -345,12 +454,20 @@ function quickPickDays(days: number) {
             <picker
               mode="date"
               :value="editEnd"
-              :start="dateUtil.addDays(editStart || minPickDate, 1)"
+              :start="dateUtil.addDays(editStart || editMinStart, 1)"
               @change="onEditEndChange"
             >
               <view class="date-modal-value">{{ editEnd || '请选择' }}</view>
             </picker>
           </view>
+        </view>
+
+        <!-- 所选日期不可租提示（已租出/整备期） -->
+        <view
+          v-if="dateTarget && isRangeUnavailable(dateTarget.carId, editStart, editEnd)"
+          class="date-modal-warn"
+        >
+          所选日期车辆不可租（已租出或整备中），请重新选择
         </view>
 
         <!-- 快捷天数 -->
@@ -667,10 +784,52 @@ function quickPickDays(days: number) {
   text-align: center;
 }
 
+.date-modal-warn {
+  margin: 0 24rpx 20rpx;
+  padding: 16rpx 20rpx;
+  font-size: 22rpx;
+  color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1rpx solid rgba(239, 68, 68, 0.3);
+  border-radius: 10rpx;
+}
+
+.date-modal-occupied {
+  margin: 0 24rpx 20rpx;
+  padding: 16rpx 20rpx;
+  font-size: 22rpx;
+  color: #f59e0b;
+  background-color: rgba(245, 158, 11, 0.1);
+  border: 1rpx solid rgba(245, 158, 11, 0.3);
+  border-radius: 10rpx;
+}
+
+.occupied-tip {
+  font-size: 20rpx;
+  color: #f59e0b;
+  background-color: rgba(245, 158, 11, 0.1);
+  border: 1rpx solid rgba(245, 158, 11, 0.3);
+  border-radius: 6rpx;
+  padding: 4rpx 12rpx;
+  margin-bottom: 8rpx;
+  display: inline-block;
+}
+
 .item-rent-days {
   font-size: 22rpx;
   color: var(--text-sub);
   margin-bottom: 8rpx;
+}
+
+.unavailable-tip {
+  font-size: 20rpx;
+  color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1rpx solid rgba(239, 68, 68, 0.3);
+  border-radius: 6rpx;
+  padding: 4rpx 12rpx;
+  margin-bottom: 8rpx;
+  display: inline-block;
 }
 
 .item-price {

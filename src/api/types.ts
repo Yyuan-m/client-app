@@ -189,6 +189,21 @@ export interface CarImageGroupVO {
   images: string[]
 }
 
+/** 不可用日期区间（闭区间 [startDate, endDate]，含整备期） */
+export interface UnavailableRangeVO {
+  startDate: string
+  endDate: string
+}
+
+/** 车辆可用期（购物车改期禁用已租出/整备期日期用） */
+export interface CarAvailabilityVO {
+  carId: number
+  /** 最早可租日期（YYYY-MM-DD，null=随时可租） */
+  availableDate?: string | null
+  /** 不可用日期区间列表 */
+  unavailableRanges?: UnavailableRangeVO[]
+}
+
 // ============ 4. carousel 模块 ============
 export interface CarouselVO {
   id: number

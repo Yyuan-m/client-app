@@ -2,7 +2,7 @@
  * 车辆 API 模块
  */
 import { get, put } from '@/api/request'
-import type { CarListQuery, CarVO, CarDetailVO, CarImageGroupVO, PageResult } from '@/api/types'
+import type { CarListQuery, CarVO, CarDetailVO, CarImageGroupVO, CarAvailabilityVO, PageResult } from '@/api/types'
 
 /** 车辆列表筛选 */
 export function getCarListApi(params: CarListQuery): Promise<PageResult<CarVO>> {
@@ -22,6 +22,11 @@ export function getHotCarsApi(): Promise<CarVO[]> {
 /** 车辆素材图片（按分类分组） */
 export function getCarImagesApi(id: number | string): Promise<CarImageGroupVO[]> {
   return get<CarImageGroupVO[]>(`/api/car/${id}/images`)
+}
+
+/** 车辆可用期查询（购物车改期禁用已租出/整备期日期） */
+export function getCarAvailabilityApi(id: number | string): Promise<CarAvailabilityVO> {
+  return get<CarAvailabilityVO>(`/api/car/${id}/availability`)
 }
 
 /** 切换推荐状态（后台配置用，客户端一般不调） */

@@ -129,6 +129,29 @@ export const useCartStore = defineStore(
       }
     }
 
+    /**
+     * 跨端实时同步检测（与 web 端对称）：
+     * 拉取远程购物车列表与本地图做摘要比对（覆盖另一端增删/改期/清空），
+     * 不一致时调用 initCart 全量同步；一致则无任何写操作，开销极小。
+     * 由购物车页轮询调用，实现双端互相实时刷新。
+     */
+    async function checkRemoteSync() {
+      try {
+        const list = await getCartListApi()
+        const remoteItems = list.map(mapFromApi)
+        const sig = (arr: CartItem[]) =>
+          arr
+            .map((i) => `${i.carId}|${i.carName}|${i.dailyPrice}|${i.startDate}|${i.endDate}|${i.days}`)
+            .sort()
+            .join(';')
+        if (sig(remoteItems) !== sig(items.value)) {
+          await initCart()
+        }
+      } catch (e) {
+        // 静默：网络抖动等下轮轮询重试即可
+      }
+    }
+
     /** 加入购物车：未登录跳登录页，调 addCartApi 后重新 initCart，新项默认选中并刷新价格 */
     async function addItem(car: CarVO, startDate: string, endDate: string, days: number) {
       const res = await addCartApi({ carId: car.id, startDate, endDate, days })
@@ -248,6 +271,7 @@ export const useCartStore = defineStore(
       mapFromApi,
       refreshPrices,
       initCart,
+      checkRemoteSync,
       addItem,
       removeItem,
       updateItem,
@@ -258,13 +282,15 @@ export const useCartStore = defineStore(
     }
   },
   {
-    // 全量持久化到 uni.storage（跨会话保留购物车）
+    // 持久化购物车基础数据（跨会话保留）；价格明细/加载态不持久化，
+    // 避免接口异常时展示过期价格、掩盖后端不可达的问题（价格必须每次实时计算）
     persist: {
       key: 'lux_customer_cart',
       storage: {
         getItem: (key: string) => uni.getStorageSync(key),
         setItem: (key: string, value: string) => uni.setStorageSync(key, value)
-      }
+      },
+      paths: ['items', 'selectedIds']
     } as any
   }
 )
