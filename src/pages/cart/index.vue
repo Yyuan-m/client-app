@@ -526,6 +526,7 @@ function quickPickDays(days: number) {
   justify-content: space-between;
   height: 88rpx;
   padding: 0 24rpx;
+  margin-bottom: 24rpx;
   background-color: var(--page-bg);
   border-bottom: 1rpx solid var(--border-color);
 }

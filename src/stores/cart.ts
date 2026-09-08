@@ -121,8 +121,9 @@ export const useCartStore = defineStore(
         const localOnly = items.value.filter((i) => !remoteCarIds.has(i.carId) && !i.id)
         const merged = [...remoteItems, ...localOnly]
         items.value = merged
-        // 新加载项默认全选
-        selectedIds.value = merged.map((i) => i.carId)
+        // 不自动全选：仅保留用户已手动选中且仍存在的项（新增/不同端加入的商品需用户手动勾选）
+        const mergedCarIds = new Set(merged.map((i) => i.carId))
+        selectedIds.value = selectedIds.value.filter((id) => mergedCarIds.has(id))
         await refreshPrices()
       } catch (e) {
         console.error('[cart.initCart] failed:', e)
@@ -152,15 +153,11 @@ export const useCartStore = defineStore(
       }
     }
 
-    /** 加入购物车：未登录跳登录页，调 addCartApi 后重新 initCart，新项默认选中并刷新价格 */
+    /** 加入购物车：未登录跳登录页，调 addCartApi 后重新 initCart，刷新价格（新项不自动选中） */
     async function addItem(car: CarVO, startDate: string, endDate: string, days: number) {
       const res = await addCartApi({ carId: car.id, startDate, endDate, days })
       // 重新加载购物车（保证数据一致性）
       await initCart()
-      // 确保新项被选中
-      if (!selectedIds.value.includes(car.id)) {
-        selectedIds.value.push(car.id)
-      }
       await refreshPrices()
       return res
     }

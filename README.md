@@ -2,8 +2,9 @@
 
 > 豪华车租赁平台用户端 - 基于 uni-app + Vue3 + TypeScript + uview-plus 的多端应用
 > 业务核心闭环：**车辆浏览 → 加入购物车 → 结算下单 → 订单支付 → 租赁中 → 确认还车 → 评价/追评**
+> 支持与 Web 端（`customer-client`）共享后端，**购物车跨端实时同步**
 
-由原 Web 项目（Vue3 + Vite + Element Plus + Pinia）完整迁移，业务逻辑 1:1 复刻。
+由原 Web 项目（Vue3 + Vite + Element Plus + Pinia）完整迁移，业务逻辑 1:1 复刻，并扩展预约咨询、售后投诉、会员等级、实名认证等企业级能力。
 
 ---
 
@@ -35,23 +36,24 @@
 customer-client-app/
 ├── src/
 │   ├── api/                          # API 接口层
-│   │   ├── modules/                  # 12 个业务模块
+│   │   ├── modules/                  # 13 个业务模块
 │   │   │   ├── announcement.ts       # 公告
 │   │   │   ├── auth.ts               # 认证
 │   │   │   ├── car.ts                # 车辆
 │   │   │   ├── carousel.ts           # 轮播
 │   │   │   ├── cart.ts               # 购物车
+│   │   │   ├── complaint.ts          # 售后投诉
 │   │   │   ├── coupon.ts             # 优惠券
-│   │   │   ├── feedback.ts           # 反馈
+│   │   │   ├── feedback.ts           # 反馈 / 预约咨询
 │   │   │   ├── order.ts              # 订单
 │   │   │   ├── price.ts              # 价格计算
 │   │   │   ├── review.ts             # 评价
 │   │   │   ├── system.ts             # 系统配置
 │   │   │   └── user.ts               # 用户
-│   │   ├── index.ts                  # 统一出口（re-export 9 个模块 + 3 个特殊模块）
+│   │   ├── index.ts                  # 统一出口
 │   │   ├── request.ts                # 请求封装（token / GET 去重 / 401 刷新 / 403 / 上传）
 │   │   └── types.ts                  # 全部 TS 类型定义（VO + 入参）
-│   ├── components/                   # 11 个通用组件
+│   ├── components/                   # 通用组件
 │   │   ├── AppFooter/index.vue       # 页脚
 │   │   ├── AppHeader/index.vue       # 顶部导航
 │   │   ├── BackTop/index.vue         # 返回顶部
@@ -60,34 +62,45 @@ customer-client-app/
 │   │   ├── DateRentPicker/index.vue  # 租期选择器（核心）
 │   │   ├── EmptyTips/index.vue       # 空状态
 │   │   ├── ImagePreview/index.vue    # 全局图片预览
+│   │   ├── LevelUpOverlay/index.vue  # 会员升级动画
 │   │   ├── PageSkeleton/index.vue    # 骨架屏
 │   │   ├── ReviewDialog/index.vue    # 评价弹窗（核心）
-│   │   └── TabBar/index.vue          # 底部导航（移动端自定义）
+│   │   ├── TabBar/index.vue          # 底部导航（移动端自定义）
+│   │   └── WxProfileField/index.vue  # 微信资料字段
 │   ├── composables/                  # 组合式函数
+│   │   ├── useNavigationBar.ts       # 原生导航栏主题适配
 │   │   ├── useScrollReveal.ts        # 滚动渐显（uni.createIntersectionObserver）
-│   │   └── useSystemConfig.ts        # 系统配置（pendingPromise 防并发）
-│   ├── pages/                        # 16 个业务页面
-│   │   ├── home/index.vue            # 首页
+│   │   ├── useSystemConfig.ts        # 系统配置（pendingPromise 防并发）
+│   │   └── useThemeClass.ts          # 页面根主题 class + 窗口背景同步
+│   ├── pages/                        # 20+ 个业务页面
+│   │   ├── home/index.vue            # 首页（沉浸式轮播 Hero）
 │   │   ├── vehicle/list.vue          # 车辆列表
 │   │   ├── vehicle/detail.vue        # 车辆详情（价格实时计算）
-│   │   ├── cart/index.vue            # 购物车
+│   │   ├── cart/index.vue            # 购物车（改期弹层 + 跨端同步）
 │   │   ├── order/checkout.vue        # 结算下单（优惠券叠加）
 │   │   ├── order/list.vue            # 订单列表
 │   │   ├── order/detail.vue          # 订单详情（支付倒计时）
 │   │   ├── profile/index.vue         # 个人中心
-│   │   ├── auth/login.vue            # 登录
-│   │   ├── auth/register.vue         # 注册
-│   │   ├── auth/forgot-password.vue  # 忘记密码
-│   │   ├── announcement/list.vue     # 公告列表
-│   │   ├── announcement/detail.vue   # 公告详情
+│   │   ├── profile/appointments.vue  # 我的预约（状态跟踪/取消）
+│   │   ├── profile/complaint.vue     # 售后投诉
+│   │   ├── profile/complaint-list.vue# 我的投诉
+│   │   ├── profile/complaint-detail.vue # 投诉详情
+│   │   ├── profile/coupons.vue       # 我的优惠券
+│   │   ├── profile/info.vue          # 个人信息
+│   │   ├── profile/member.vue        # 会员等级
+│   │   ├── profile/reviews.vue       # 我的评价
+│   │   ├── profile/verify.vue        # 实名认证
+│   │   ├── profile/settings.vue      # 设置（主题/密码/缓存）
+│   │   ├── auth/*.vue                # 登录 / 注册 / 忘记密码
+│   │   ├── announcement/*.vue        # 公告
 │   │   ├── about/index.vue           # 关于我们
-│   │   ├── contact/index.vue         # 联系客服
+│   │   ├── contact/index.vue         # 联系客服（服务热线/留言反馈）
 │   │   └── error/404.vue             # 404 页面
 │   ├── router/                       # 路由层
 │   │   └── interceptor.ts            # 全局路由拦截器（鉴权 + guest + 标题）
 │   ├── stores/                       # Pinia 状态管理
 │   │   ├── app.ts                    # 应用状态（主题 + 图片预览 + 登录弹窗）
-│   │   ├── cart.ts                   # 购物车（核心）
+│   │   ├── cart.ts                   # 购物车（核心，含跨端同步检测）
 │   │   ├── filter.ts                 # 筛选条件
 │   │   ├── user.ts                   # 用户/鉴权
 │   │   └── index.ts                  # 统一出口
@@ -96,7 +109,8 @@ customer-client-app/
 │   ├── utils/                        # 工具集
 │   │   ├── auth.ts                   # token / 用户信息（uni.storage）
 │   │   ├── image.ts                  # 图片 URL 解析（多端基址）
-│   │   └── index.ts                  # storage / dateUtil / moneyUtil / imageUtil / validators / browserUtil
+│   │   ├── navbar.ts                 # 自定义导航避让胶囊
+│   │   └── index.ts                  # storage / dateUtil / moneyUtil / validators
 │   ├── App.vue                       # 根组件
 │   ├── main.ts                       # 入口（pinia + uview-plus + 路由拦截器）
 │   ├── env.d.ts                      # 类型声明
@@ -111,8 +125,7 @@ customer-client-app/
 ├── package.json
 ├── tsconfig.json
 ├── vite.config.ts                    # Vite 配置（H5 端 proxy）
-├── 基础文档.md                       # 原 Web 项目完整功能文档
-└── uniapp小程序初始化文档.md         # 迁移强制约束文档
+└── README.md
 ```
 
 ---
@@ -187,6 +200,7 @@ VITE_ADMIN_UPLOAD_BASE=http://localhost:8088
 
 - **H5 端**：以上变量在 `.env.development` 中被覆盖为空字符串，由 `vite.config.ts` 的 `server.proxy` 转发
 - **小程序 / App 端**：必须填完整域名（小程序还需在微信公众后台配置合法域名）
+- **⚠️ 生产构建坑**：`.env.production` 若为占位假域名（如 `https://admin.example.com`），`build:mp-weixin` 产物中图片会全部请求假域名而裂图、接口静默失败，务必替换为真实可访问地址
 
 ### 4.2 `pages.json` 全局样式（关键片段）
 
@@ -299,16 +313,18 @@ export const useCartStore = defineStore('cart', () => {
   const grandTotal = computed(() => priceDetails.value.reduce((s, p) => s + Number(p.totalAmount), 0))
 
   async function refreshPrices() { /* 调 calcCartPriceApi */ }
-  async function initCart() { /* 合并本地+远程，新项默认全选 */ }
-  async function addItem(car, startDate, endDate, days) { /* addCartApi + initCart */ }
+  async function initCart() { /* 合并本地+远程；不自动全选，仅保留已手动选中项 */ }
+  async function checkRemoteSync() { /* 拉远程列表与本地摘要比对，不一致触发 initCart（跨端同步） */ }
+  async function addItem(car, startDate, endDate, days) { /* addCartApi + initCart（新项不自动选中） */ }
   // ... toggleSelect / removeItem / updateItem / clearSelected / clear / isInCart / getPriceDetail
 }, {
-  persist: {                                    // 全量持久化到 uni.storage
+  persist: {                                    // 只持久化 items/selectedIds
     key: 'lux_customer_cart',
     storage: {
       getItem: (k) => uni.getStorageSync(k),
       setItem: (k, v) => uni.setStorageSync(k, v)
-    }
+    },
+    paths: ['items', 'selectedIds']             // 价格明细不持久化，每次实时计算
   } as any
 })
 ```
@@ -539,9 +555,27 @@ available → receive → unused → lock（下单预占）→ verify（核销�
 - 加载中：`PageSkeleton`（grid / detail / list 三种模式，shimmer 动画）
 - 加载后无数据：`EmptyTips`（可带操作按钮）
 
+### 11. 购物车跨端实时同步
+
+与 Web 端（`customer-client`）共用后端，同账号登录时购物车实时互相同步（增删 / 改租期 / 清空）：
+
+- 购物车页 `onShow` 启动每 5 秒轮询 `cartStore.checkRemoteSync()`：拉取远程列表与本地做摘要比对（`carId|车名|价格|起止日期|天数` 排序拼接），不一致才触发 `initCart()` 全量刷新
+- `onHide` / `onUnload` 停止轮询，避免后台空耗请求
+- 配合 Web 端的同机制轮询，实现双端互相实时刷新
+
+### 12. 购物车商品手动勾选
+
+- 商品默认**不自动勾选**，需用户手动勾选（或「全选」）后才可去结算
+- `initCart` 仅保留用户已手动选中且仍存在的项；新加入 / 跨端同步进来的商品均不自动选中，选中状态不会跨端残留
+
+### 13. 购物车改期弹层
+
+- 点击商品日期区域弹出底部弹层（取/还车日 picker + 快捷天数），选完立即生效并重算价格
+- 已租出 / 整备期区间在弹层内直观展示并禁用，保存前再做区间冲突校验（后端二次兜底）
+
 ---
 
-## 八、API 接口清单（12 个模块）
+## 八、API 接口清单（13 个模块）
 
 详细签名见 [src/api/modules/](file:///c:/Users/ZhuanZ/Desktop/record/project/react/customer/customer-client-app/src/api/modules/) 各文件。完整 URL 列表见原 [基础文档.md](file:///c:/Users/ZhuanZ/Desktop/record/project/react/customer/customer-client-app/基础文档.md) 第六章。
 
@@ -552,8 +586,9 @@ available → receive → unused → lock（下单预占）→ verify（核销�
 | car | 5 | `/api/car/list`、`/detail/{id}`、`/hot`、`/{id}/images`、`/recommend/{id}` |
 | carousel | 1 | `/api/carousel/active` |
 | cart | 6 | `/api/cart/list`、`/count`、`/add`、`/update/{id}`、`/{id}`、`/clear` |
+| complaint | 4 | `/api/complaint/submit`、`/mine`、`/{id}`、`/{id}/rate` |
 | coupon | 10 | `/api/coupon/available`、`/{id}`、`/mine`、`/usable`、`/receive/{id}`、`/lock`、`/cancel-lock`、`/verify`、`/calculate`、`/claimed-ids` |
-| feedback | 1 | `/api/feedback/submit` |
+| feedback | 4 | `/api/feedback/submit`、`/appointments`、`/appointments/{id}/cancel`、`/appointments/{id}/contact` |
 | order | 8 | `/api/order/create`、`/list`、`/detail/{id}`、`/cancel/{id}`、`/pay/{id}`、`/complete/{id}`、`/active`、`/reviewable` |
 | price | 2 | `/api/price/car`、`/api/price/cart` |
 | review | 3 | `/api/review/submit`、`/order/{orderId}`、`/can-review/{orderId}` |
@@ -666,9 +701,13 @@ available → receive → unused → lock（下单预占）→ verify（核销�
 ### 10.5 主题切换
 
 - 默认暗色（Ferrari 风格）
-- 切换：`appStore.toggleTheme()` 或 `appStore.setTheme('light')`
-- 持久化：仅持久化 `theme`，弹窗 / 预览状态不持久化
-- 应用：通过 `uni.setNavigationBarColor` 调整导航栏 + `page.light` 类切换页面样式
+- 切换：`appStore.toggleTheme()` 或 `appStore.setPreference('light' | 'dark' | 'auto')`
+- 持久化：仅持久化 `themePreference`，弹窗 / 预览状态不持久化
+- 应用机制：
+  - 页面根元素绑定 `useThemeClass().themeClass`，浅色时加 `.theme-light` 覆盖 CSS 变量
+  - `useThemeClass` 内部在页面 `onLoad/onShow` 及主题变化时同步当前页窗口背景与下拉刷新指示点颜色（修复跳转/加载时露出黑底）
+  - `useNavigationBar` 在 `onShow/onReady` 及主题变化时调 `uni.setNavigationBarColor` 同步原生导航栏（注意：不可在 `onLoad` 阶段调用，否则自定义导航页会报 `fail: page not found`）
+- 弹层（u-picker / u-popup / u-modal）在 `App.vue` 通过 `.theme-light` 覆盖为浅色样式
 
 ### 10.6 已知限制
 
@@ -676,6 +715,7 @@ available → receive → unused → lock（下单预占）→ verify（核销�
 - 小程序端不支持 SVG data URI 在 image src 中，`imageUtil.placeholder` 在小程序端返回空字符串
 - `useScrollReveal` 在小程序端因为无法直接操作 DOM class，业务组件需通过响应式数据控制渐显状态（H5 端正常工作）
 - App 端打包需 HBuilderX，本仓库仅生成可编译代码
+- 自定义 `TabBar` z-index 为 999；底部弹层（如购物车改期弹层）需注意层级：弹层打开时应隐藏 TabBar，且 u-popup z-index 保持 998，避免遮挡 picker 原生日历弹窗
 
 ---
 
@@ -735,6 +775,6 @@ JWT token 2 小时过期，refresh token 7 天过期，与 `request.ts` 的 401 
 
 ---
 
-> 文档生成时间：2026-08-19
+> 文档更新时间：2026-09-08
 > 项目版本：v1.0.0
 > 技术栈：uni-app + Vue 3.4 + Vite 5 + uview-plus 3 + Pinia 2 + TypeScript 5
