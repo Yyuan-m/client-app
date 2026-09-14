@@ -642,7 +642,7 @@ function todayPlus(days: number): string {
         </view>
         <scroll-view scroll-x class="coupons-scroll" :show-scrollbar="false">
           <view class="coupons-row">
-            <view v-for="c in coupons" :key="c.id" class="coupon-card-mini">
+            <view v-for="c in coupons" :key="c.id" class="coupon-card-mini" :class="{ 'is-claimed': isCouponClaimed(c), 'is-sold-out': isCouponSoldOut(c) }">
               <view class="coupon-face">
                 <view class="coupon-value" :class="couponValueClass(c)">{{ couponFaceValue(c) }}</view>
                 <view class="coupon-type">{{ c.couponName || c.name || '优惠券' }}</view>
@@ -1281,6 +1281,15 @@ function todayPlus(days: number): string {
   background: linear-gradient(135deg, rgba(255, 46, 46, 0.18) 0%, var(--card-bg) 100%);
   border-radius: 16rpx;
   border: 1rpx solid #ff2e2e;
+}
+
+/* 已领取置灰：整体去饱和 + 降低透明度，提示已领取过 */
+.coupon-card-mini.is-claimed,
+.coupon-card-mini.is-sold-out {
+  filter: grayscale(1);
+  opacity: 0.7;
+  border-color: var(--border-color);
+  .coupon-value { color: #999; }
 }
 
 .coupon-face {

@@ -21,6 +21,7 @@ const { themeClass } = useThemeClass()
 useNavigationBar()
 
 const SAVED_USERNAME_KEY = 'lux_saved_username'
+const SAVED_PASSWORD_KEY = 'lux_saved_password'
 /** 注册页暂存的微信头像 key（注册成功后保存，登录成功后上传） */
 const WX_PENDING_AVATAR_KEY = 'lux_wx_pending_avatar'
 
@@ -45,10 +46,11 @@ onLoad((options: Record<string, string> | undefined) => {
       redirect.value = opts.redirect
     }
   }
-  // 回填已保存的用户名
+  // 回填已保存的用户名和密码
   const saved = storage.get<string>(SAVED_USERNAME_KEY)
   if (saved) {
     form.username = saved
+    form.password = storage.get<string>(SAVED_PASSWORD_KEY, '') || ''
     rememberUsername.value = true
   }
   // 读取注册页暂存的微信头像
@@ -78,11 +80,13 @@ async function onSubmit() {
       username: form.username.trim(),
       password: form.password
     })
-    // 记住密码：勾选则保存用户名，未勾选则清除
+    // 记住密码：勾选则保存用户名+密码，未勾选则清除
     if (rememberUsername.value) {
       storage.set<string>(SAVED_USERNAME_KEY, form.username.trim())
+      storage.set<string>(SAVED_PASSWORD_KEY, form.password)
     } else {
       storage.remove(SAVED_USERNAME_KEY)
+      storage.remove(SAVED_PASSWORD_KEY)
     }
     uni.showToast({ title: '登录成功', icon: 'success' })
     // 微信小程序端：同步微信头像昵称到个人资料（失败不阻断跳转）
@@ -169,7 +173,7 @@ function goHome() {
           <view class="checkbox" :class="{ checked: rememberUsername }">
             <text v-if="rememberUsername" class="check-icon">✓</text>
           </view>
-          <text class="remember-text">记住用户名</text>
+          <text class="remember-text">记住密码</text>
         </view>
         <text class="forgot-link" @tap="goForgot">忘记密码？</text>
       </view>
