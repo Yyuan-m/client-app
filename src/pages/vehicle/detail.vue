@@ -15,7 +15,7 @@ import { useUserStore } from '@/stores/user'
 import { useCartStore } from '@/stores/cart'
 import { useThemeClass } from '@/composables/useThemeClass'
 import { useNavigationBar } from '@/composables/useNavigationBar'
-import { getCarDetailApi, getCarImagesApi } from '@/api/modules/car'
+import { getCarDetailApi, getCarImagesApi, getCarAvailabilityApi } from '@/api/modules/car'
 import { calcCarPriceApi } from '@/api/modules/price'
 import { resolveAdminImage } from '@/utils/image'
 import { moneyUtil, dateUtil, validators, rentCountLevel, rentDaysLevel } from '@/utils'
@@ -35,6 +35,10 @@ const car = ref<CarDetailVO | null>(null)
 const imageGroups = ref<CarImageGroupVO[]>([])
 const loading = ref(true)
 const submitting = ref(false)
+
+// 车辆可用性：精确不可选区间（已租出+整备期，闭区间）与最早空闲日
+const unavailableRanges = ref<{ startDate: string; endDate: string }[]>([])
+const availabilityAvailableDate = ref<string | null>(null)
 
 // 主图 swiper 当前索引
 const currentMainImage = ref(0)
@@ -109,10 +113,26 @@ const quickPickOptions = computed<number[]>(() => {
   return all.filter((d) => d >= minRentDays.value && (maxRentDays.value == null || d <= maxRentDays.value))
 })
 const minDate = computed(() => {
+  // 优先用可用性接口的"今天起第一个空闲日"；回退车辆详情 availableDate；最后回退今天
+  if (availabilityAvailableDate.value) return availabilityAvailableDate.value
   // 已出租车辆：availableDate 为最早可租日
   if (car.value?.availableDate) return car.value.availableDate
   return dateUtil.today()
 })
+
+// 所选租期与不可选区间（已租出+整备期）重叠校验：返回 true 表示有冲突
+function isRangeConflicted(): boolean {
+  const { start, end } = dateRange
+  if (!start || !end || !unavailableRanges.value.length) return false
+  return unavailableRanges.value.some((r) => start <= r.endDate && end >= r.startDate)
+}
+
+// 冲突提示（取车/还车日选择与快捷选项后校验）
+function checkRangeConflict(): boolean {
+  if (!isRangeConflicted()) return true
+  uni.showToast({ title: '所选日期与已有预约/整备时间冲突，请重新选择', icon: 'none' })
+  return false
+}
 
 // 价格明细
 const priceDetail = ref<PriceDetailVO | null>(null)
@@ -179,6 +199,18 @@ onShow(() => {
 
 onUnload(() => {})
 
+// 拉取车辆可用性（精确不可选区间 + 最早空闲日）
+async function loadAvailability() {
+  if (!car.value?.id) return
+  try {
+    const av = await getCarAvailabilityApi(car.value.id)
+    unavailableRanges.value = av?.unavailableRanges || []
+    availabilityAvailableDate.value = av?.availableDate || null
+  } catch (e) {
+    console.error('[vehicle.detail] loadAvailability failed:', e)
+  }
+}
+
 async function loadDetail() {
   loading.value = true
   try {
@@ -191,6 +223,8 @@ async function loadDetail() {
     ])
     car.value = detail
     imageGroups.value = images || []
+    // 拉取精确可用性（不可选区间 + 最早空闲日），供起租日计算与冲突校验
+    loadAvailability()
     // 设置导航栏标题
     uni.setNavigationBarTitle({ title: detail.name || '车辆详情' })
   } catch (e) {
@@ -244,10 +278,18 @@ function onStartDateChange(e: any) {
   if (dateRange.end && dateUtil.daysBetween(dateRange.start, dateRange.end) <= 0) {
     dateRange.end = dateUtil.addDays(dateRange.start, minRentDays.value)
   }
+  // 选期与已租出/整备区间冲突即时提示
+  if (dateRange.end && isRangeConflicted()) {
+    uni.showToast({ title: '所选日期与已有预约/整备时间冲突，请重新选择', icon: 'none' })
+  }
 }
 
 function onEndDateChange(e: any) {
   dateRange.end = e.detail.value
+  // 选期与已租出/整备区间冲突即时提示
+  if (dateRange.start && isRangeConflicted()) {
+    uni.showToast({ title: '所选日期与已有预约/整备时间冲突，请重新选择', icon: 'none' })
+  }
 }
 
 // 快捷选择 N 天
@@ -256,6 +298,10 @@ function quickPickDays(days: number) {
   const today = dateUtil.today()
   dateRange.start = today
   dateRange.end = dateUtil.addDays(today, days)
+  // 选期与已租出/整备区间冲突即时提示
+  if (isRangeConflicted()) {
+    uni.showToast({ title: '所选日期与已有预约/整备时间冲突，请重新选择', icon: 'none' })
+  }
 }
 
 // 加入购物车
@@ -273,6 +319,8 @@ async function addToCart() {
     uni.showToast({ title: rentErrorText.value || '请选择有效租期', icon: 'none' })
     return
   }
+  // 所选租期与已有预约/整备期冲突校验（后端也会兜底校验）
+  if (!checkRangeConflict()) return
   // 已出租车辆：二次校验 availableDate
   if (car.value.status === 'rented' && car.value.availableDate) {
     if (dateRange.start < car.value.availableDate) {
@@ -333,6 +381,8 @@ async function rentNow() {
     uni.showToast({ title: rentErrorText.value || '请选择有效租期', icon: 'none' })
     return
   }
+  // 所选租期与已有预约/整备期冲突校验（后端也会兜底校验）
+  if (!checkRangeConflict()) return
   // 已出租车辆：二次校验
   if (car.value.status === 'rented' && car.value.availableDate) {
     if (dateRange.start < car.value.availableDate) {

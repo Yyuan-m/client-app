@@ -521,10 +521,14 @@ function todayPlus(days: number): string {
               class="order-card"
               @tap="goOrderDetail(order)"
             >
-              <image :src="resolveAdminImage(order.carCover || '')" mode="aspectFill" class="order-img" lazy-load />
+              <view class="order-img"><image :src="resolveAdminImage(order.carCover || '')" mode="aspectFill" class="order-img-inner" lazy-load /></view>
               <view class="order-info">
                 <view class="order-name">{{ order.carName }}</view>
-                <view class="order-date">{{ order.startDate }} 至 {{ order.endDate }}</view>
+                <view class="order-date">
+                  <text>{{ order.startDate }}</text>
+                  <text class="date-arrow">至</text>
+                  <text>{{ order.endDate }}</text>
+                </view>
                 <view class="order-status" :class="statusClass(order.status)">{{ statusText(order.status) }}</view>
               </view>
             </view>
@@ -966,8 +970,14 @@ function todayPlus(days: number): string {
 
 .order-img {
   width: 200rpx;
-  height: 160rpx;
   flex-shrink: 0;
+  align-self: stretch;
+  min-height: 160rpx;
+}
+.order-img-inner {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .order-info {
@@ -991,6 +1001,15 @@ function todayPlus(days: number): string {
 .order-date {
   font-size: 22rpx;
   color: var(--text-sub);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  line-height: 1.5;
+  word-break: break-all;
+}
+.date-arrow {
+  color: var(--text-dim);
+  margin: 0 8rpx;
 }
 
 .order-status {
