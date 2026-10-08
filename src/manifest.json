@@ -1,6 +1,6 @@
 {
   "name": "大圣玩车",
-  "appid": "__UNI__1E001A7",
+  "appid": "wxb9f6915f5b849967",
   "description": "豪华车租赁平台用户端 - uni-app 多端应用",
   "versionName": "1.0.0",
   "versionCode": "100",
@@ -31,7 +31,7 @@
   },
   "quickapp": {},
   "mp-weixin": {
-    "appid": "wx1cbf5acaa5a3d3ea",
+    "appid": "wxb9f6915f5b849967",
     "darkmode": true,
     "setting": {
       "urlCheck": true,
